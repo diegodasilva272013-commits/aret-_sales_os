@@ -15,6 +15,8 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [emailSent, setEmailSent] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendMsg, setResendMsg] = useState("")
   const router = useRouter()
   const supabase = createClient()
 
@@ -89,9 +91,37 @@ export default function LoginPage() {
               <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
                 Te enviamos un link de confirmación a <strong>{email}</strong>
               </p>
-              <button onClick={() => { setEmailSent(false); setMode("login") }} className="text-sm hover:underline" style={{ color: "var(--accent-light)" }}>
-                Ya confirmé → Iniciar sesión
+              <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
+                Revisá también la carpeta de spam o correo no deseado.
+              </p>
+              <button
+                disabled={resending}
+                onClick={async () => {
+                  setResending(true)
+                  setResendMsg("")
+                  const { error } = await supabase.auth.resend({ type: "signup", email })
+                  setResending(false)
+                  if (error) {
+                    setResendMsg(error.message)
+                  } else {
+                    setResendMsg("✓ Email reenviado correctamente")
+                  }
+                }}
+                className="text-sm font-medium hover:underline disabled:opacity-50"
+                style={{ color: "var(--accent)" }}
+              >
+                {resending ? "Reenviando..." : "Reenviar email de confirmación"}
               </button>
+              {resendMsg && (
+                <p className="text-xs mt-2" style={{ color: resendMsg.startsWith("✓") ? "var(--success, #22c55e)" : "var(--danger)" }}>
+                  {resendMsg}
+                </p>
+              )}
+              <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
+                <button onClick={() => { setEmailSent(false); setMode("login"); setResendMsg("") }} className="text-sm hover:underline" style={{ color: "var(--accent-light)" }}>
+                  Ya confirmé → Iniciar sesión
+                </button>
+              </div>
             </div>
 
           /* Estado: email de reset enviado */

@@ -17,11 +17,48 @@ export default function ResetPasswordPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // Supabase setea la sesión desde el hash de la URL automáticamente
+    let cancelled = false
+
+    async function checkSession() {
+      // 1. Verificar si ya hay sesión activa (viene de /auth/confirm con cookies)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user && !cancelled) {
+        setReady(true)
+        return
+      }
+
+      // 2. Esperar un poco y reintentar (las cookies pueden tardar en propagarse)
+      await new Promise(r => setTimeout(r, 1000))
+      const { data: { user: user2 } } = await supabase.auth.getUser()
+      if (user2 && !cancelled) {
+        setReady(true)
+        return
+      }
+
+      // 3. Si después de 6 segundos no hay sesión, redirigir al login
+      setTimeout(() => {
+        if (!cancelled) {
+          setReady((current) => {
+            if (!current) router.push("/login?error=link_expirado")
+            return current
+          })
+        }
+      }, 5000)
+    }
+
+    checkSession()
+
+    // También escuchar eventos por si el token viene en el hash de la URL
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") setReady(true)
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+        if (!cancelled) setReady(true)
+      }
     })
-    return () => subscription.unsubscribe()
+
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   const inputCls = "w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"

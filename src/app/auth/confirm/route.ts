@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServerClient } from "@supabase/ssr"
 
 // Supabase redirige aquí al confirmar email o al resetear contraseña
 // URL: /auth/confirm?token_hash=xxx&type=email|recovery&next=/dashboard
@@ -10,14 +10,33 @@ export async function GET(req: NextRequest) {
   const next = searchParams.get("next") ?? "/dashboard"
 
   if (token_hash && type) {
-    const supabase = await createClient()
+    const redirectTo = type === "recovery" ? "/auth/reset" : next
+    const redirectUrl = new URL(redirectTo, req.url)
+
+    // Crear response primero para poder setear cookies en ella
+    const response = NextResponse.redirect(redirectUrl)
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return req.cookies.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            )
+          },
+        },
+      }
+    )
+
     const { error } = await supabase.auth.verifyOtp({ type, token_hash })
 
     if (!error) {
-      if (type === "recovery") {
-        return NextResponse.redirect(new URL("/auth/reset", req.url))
-      }
-      return NextResponse.redirect(new URL(next, req.url))
+      return response
     }
   }
 

@@ -21,7 +21,7 @@ export default async function PipelinePage() {
   if (!profile?.is_owner) {
     query = query.eq("assigned_to", user?.id || "")
   } else if (profile?.organization_id) {
-    // Owner: filtrar por org via assigned_to
+    query = query.eq("organization_id", profile.organization_id)
   }
 
   const { data: prospects } = await query

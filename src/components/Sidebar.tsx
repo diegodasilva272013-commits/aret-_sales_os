@@ -184,6 +184,27 @@ export default function Sidebar({ profile, org, pendingFollowUps = 0, unreadMess
             Panel Admin
           </Link>
         )}
+        {profile?.is_owner && (
+          <Link
+            href="/team"
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-2",
+              pathname === "/team" ? "text-white" : "hover:text-white"
+            )}
+            style={{
+              background: pathname === "/team" ? "rgba(108,99,255,0.7)" : "rgba(108,99,255,0.08)",
+              color: pathname === "/team" ? "white" : "#6c63ff",
+              border: "1px solid rgba(108,99,255,0.2)",
+            }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            Control Equipo
+          </Link>
+        )}
         {navItems.map(item => {
           const isActive = pathname === item.href || (item.href !== "/dashboard" && item.href !== "/prospects/new" && pathname.startsWith(item.href))
           return (

@@ -22,6 +22,20 @@ export default async function MessagesPage() {
     .eq("organization_id", profile?.organization_id)
     .order("created_at", { ascending: false })
 
+  if (!profile?.is_owner) {
+    // Get assigned prospect IDs first, then filter messages
+    const { data: myProspects } = await supabase
+      .from("prospects")
+      .select("id")
+      .eq("assigned_to", user.id)
+    const myIds = (myProspects || []).map(p => p.id)
+    if (myIds.length > 0) {
+      msgQuery = msgQuery.in("prospect_id", myIds)
+    } else {
+      msgQuery = msgQuery.eq("prospect_id", "00000000-0000-0000-0000-000000000000")
+    }
+  }
+
   const { data: conversations } = await msgQuery
 
   // Agrupar por prospect_id, quedarse con el último mensaje de cada uno
@@ -29,11 +43,6 @@ export default async function MessagesPage() {
   const convos: typeof conversations = []
   for (const msg of (conversations || [])) {
     const pid = (msg as { prospect_id: string }).prospect_id
-    // Filter for non-owners: only show conversations for their assigned prospects
-    if (!profile?.is_owner) {
-      const prospect = (msg as { prospects: { assigned_to: string } | null }).prospects
-      if (prospect && prospect.assigned_to !== user.id) continue
-    }
     if (!seen.has(pid)) {
       seen.add(pid)
       convos.push(msg)

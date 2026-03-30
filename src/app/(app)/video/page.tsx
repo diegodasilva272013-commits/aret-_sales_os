@@ -18,6 +18,10 @@ export default async function VideoPage() {
     .eq("organization_id", profile?.organization_id)
     .order("created_at", { ascending: false })
 
+  if (!profile?.is_owner) {
+    recordingsQuery = recordingsQuery.eq("user_id", user.id)
+  }
+
   let prospectsQuery = supabase
     .from("prospects")
     .select("id, full_name, company, whatsapp_number")

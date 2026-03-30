@@ -19,6 +19,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       redirect("/onboarding")
     }
 
+    // Si no completó el setup wizard, redirigir
+    if (profile?.organization_id && profile?.is_owner) {
+      const { data: orgSetup } = await supabase
+        .from("organizations")
+        .select("setup_completed")
+        .eq("id", profile.organization_id)
+        .single()
+      if (orgSetup && !orgSetup.setup_completed) {
+        redirect("/setup")
+      }
+    }
+
     // Mensajes inbound no leídos (para badge en sidebar)
     const { count: unreadMessages } = await supabase
       .from("whatsapp_messages")

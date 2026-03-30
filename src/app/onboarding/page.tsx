@@ -64,7 +64,7 @@ export default function OnboardingPage() {
 
       if (profileError) throw new Error("Error actualizando perfil")
 
-      router.push("/dashboard")
+      router.push("/setup")
       router.refresh()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Error")

@@ -165,35 +165,17 @@ export default function Sidebar({ profile, org, pendingFollowUps = 0, unreadMess
 
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {/* Admin link - solo owners */}
-        {profile?.is_owner && (
-          <Link
-            href="/admin"
-            className={cn(
-              "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-2",
-              pathname === "/admin" ? "text-white" : "hover:text-white"
-            )}
-            style={{
-              background: pathname === "/admin" ? "rgba(239,68,68,0.7)" : "rgba(239,68,68,0.08)",
-              color: pathname === "/admin" ? "white" : "#ef4444",
-              border: "1px solid rgba(239,68,68,0.2)",
-            }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-            Panel Admin
-          </Link>
-        )}
+        {/* Control de Equipo - solo owners */}
         {profile?.is_owner && (
           <Link
             href="/team"
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all mb-2",
-              pathname === "/team" ? "text-white" : "hover:text-white"
+              (pathname === "/team" || pathname === "/admin") ? "text-white" : "hover:text-white"
             )}
             style={{
-              background: pathname === "/team" ? "rgba(108,99,255,0.7)" : "rgba(108,99,255,0.08)",
-              color: pathname === "/team" ? "white" : "#6c63ff",
+              background: (pathname === "/team" || pathname === "/admin") ? "rgba(108,99,255,0.7)" : "rgba(108,99,255,0.08)",
+              color: (pathname === "/team" || pathname === "/admin") ? "white" : "#6c63ff",
               border: "1px solid rgba(108,99,255,0.2)",
             }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -202,7 +184,7 @@ export default function Sidebar({ profile, org, pendingFollowUps = 0, unreadMess
               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
-            Control Equipo
+            Centro de Control
           </Link>
         )}
         {navItems.map(item => {

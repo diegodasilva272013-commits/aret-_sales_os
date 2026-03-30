@@ -466,7 +466,7 @@ export default function SettingsClient({ profile, team, org, calendarConnected }
               <p className="text-xs font-semibold mb-2" style={{ color: "var(--text-secondary)" }}>🔗 Link de invitación</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 text-xs truncate px-3 py-2 rounded-lg" style={{ background: "var(--background)", color: "var(--accent-light)", border: "1px solid var(--border)" }}>
-                  {`${process.env.NEXT_PUBLIC_APP_URL}/join/${org.id}`}
+                  {`${typeof window !== "undefined" ? window.location.origin : ""}/join/${org.id}`}
                 </code>
                 <button
                   type="button"

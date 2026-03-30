@@ -15,43 +15,100 @@ export default function JoinPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [loadingOrg, setLoadingOrg] = useState(true)
+  const [emailSent, setEmailSent] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendMsg, setResendMsg] = useState("")
+  const [mode, setMode] = useState<"register" | "login">("register")
   const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => {
-    supabase.from("organizations").select("name, logo_url").eq("id", orgId).single()
-      .then(({ data }) => { setOrg(data); setLoadingOrg(false) })
+    async function init() {
+      // Cargar org
+      const { data } = await supabase.from("organizations").select("name, logo_url").eq("id", orgId).single()
+      setOrg(data)
+      setLoadingOrg(false)
+
+      // Si ya está logueado, vincular directo
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase.from("profiles").select("organization_id").eq("id", user.id).single()
+        if (profile && !profile.organization_id) {
+          await supabase.from("profiles").update({ organization_id: orgId, is_owner: false }).eq("id", user.id)
+          router.push("/dashboard")
+          router.refresh()
+        } else if (profile?.organization_id === orgId) {
+          router.push("/dashboard")
+          router.refresh()
+        }
+      }
+    }
+    init()
   }, [orgId])
 
-  async function handleJoin(e: React.FormEvent) {
+  async function handleJoinRegister(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError("")
 
+    // Registrar nuevo usuario con orgId en metadata
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        data: { full_name: fullName, pending_org_id: orgId },
+        emailRedirectTo: `${window.location.origin}/auth/confirm?next=/dashboard`,
+      },
     })
 
     if (signUpError) { setError(signUpError.message); setLoading(false); return }
     if (!data.user) { setError("Error creando cuenta"); setLoading(false); return }
 
-    // Vincular a la org
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ organization_id: orgId, is_owner: false })
-      .eq("id", data.user.id)
-
-    if (profileError) {
-      // Reintentar después de un momento (trigger puede demorar)
-      await new Promise(r => setTimeout(r, 1500))
-      await supabase.from("profiles").update({ organization_id: orgId, is_owner: false }).eq("id", data.user.id)
+    // Si hay sesión inmediata (email confirm desactivado), vincular directo
+    if (data.session) {
+      await linkToOrg(data.user.id)
+      router.push("/dashboard")
+      router.refresh()
+      return
     }
 
+    // Email confirmation requerida
+    setEmailSent(true)
+    setLoading(false)
+  }
+
+  async function handleJoinLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError("")
+
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+    if (loginError) { setError(loginError.message); setLoading(false); return }
+    if (!data.user) { setError("Error al iniciar sesión"); setLoading(false); return }
+
+    await linkToOrg(data.user.id)
     router.push("/dashboard")
     router.refresh()
   }
+
+  async function linkToOrg(userId: string) {
+    // Esperar a que el trigger cree el profile si es nuevo
+    let attempts = 0
+    while (attempts < 5) {
+      const { data: profile } = await supabase.from("profiles").select("id, organization_id").eq("id", userId).single()
+      if (profile) {
+        if (!profile.organization_id) {
+          await supabase.from("profiles").update({ organization_id: orgId, is_owner: false }).eq("id", userId)
+        }
+        return
+      }
+      attempts++
+      await new Promise(r => setTimeout(r, 1000))
+    }
+  }
+
+  const inputCls = "w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
+  const inputStyle = { background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-primary)" }
 
   if (loadingOrg) {
     return (
@@ -93,62 +150,118 @@ export default function JoinPage() {
             }
           </div>
           <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>Unirte a {org.name}</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Creá tu cuenta de setter para empezar</p>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>
+            {mode === "register" ? "Creá tu cuenta de setter para empezar" : "Iniciá sesión para unirte al equipo"}
+          </p>
         </div>
 
         <div className="rounded-2xl p-8" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-          <form onSubmit={handleJoin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Nombre completo</label>
-              <input type="text" value={fullName} onChange={e => setFullName(e.target.value)}
-                placeholder="Tu nombre" required
-                className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-                onFocus={e => e.target.style.borderColor = "var(--accent)"}
-                onBlur={e => e.target.style.borderColor = "var(--border)"} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Email</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="tu@email.com" required
-                className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-                onFocus={e => e.target.style.borderColor = "var(--accent)"}
-                onBlur={e => e.target.style.borderColor = "var(--border)"} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Contraseña</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder="Mínimo 6 caracteres" required minLength={6}
-                className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
-                style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-                onFocus={e => e.target.style.borderColor = "var(--accent)"}
-                onBlur={e => e.target.style.borderColor = "var(--border)"} />
-            </div>
-
-            {error && (
-              <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(239,68,68,0.1)", color: "var(--danger)", border: "1px solid rgba(239,68,68,0.2)" }}>
-                {error}
+          {/* Email de confirmación enviado */}
+          {emailSent ? (
+            <div className="text-center py-4">
+              <div className="text-4xl mb-4">📧</div>
+              <h2 className="font-bold text-lg mb-2" style={{ color: "var(--text-primary)" }}>Revisá tu email</h2>
+              <p className="text-sm mb-2" style={{ color: "var(--text-secondary)" }}>
+                Te enviamos un link de confirmación a <strong>{email}</strong>
+              </p>
+              <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>
+                Una vez que confirmes, vas a quedar vinculado automáticamente a <strong>{org.name}</strong>.
+                Revisá también la carpeta de spam.
+              </p>
+              <button
+                disabled={resending}
+                onClick={async () => {
+                  setResending(true)
+                  setResendMsg("")
+                  const { error } = await supabase.auth.resend({ type: "signup", email })
+                  setResending(false)
+                  setResendMsg(error ? error.message : "✓ Email reenviado")
+                }}
+                className="text-sm font-medium hover:underline disabled:opacity-50"
+                style={{ color: "var(--accent)" }}
+              >
+                {resending ? "Reenviando..." : "Reenviar email de confirmación"}
+              </button>
+              {resendMsg && (
+                <p className="text-xs mt-2" style={{ color: resendMsg.startsWith("✓") ? "#22c55e" : "var(--danger)" }}>
+                  {resendMsg}
+                </p>
+              )}
+              <div className="mt-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
+                <button onClick={() => { setEmailSent(false); setMode("login") }} className="text-sm hover:underline" style={{ color: "var(--accent-light)" }}>
+                  Ya confirmé → Iniciar sesión
+                </button>
               </div>
-            )}
+            </div>
+          ) : (
+            <>
+              <form onSubmit={mode === "register" ? handleJoinRegister : handleJoinLogin} className="space-y-4">
+                {mode === "register" && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Nombre completo</label>
+                    <input type="text" value={fullName} onChange={e => setFullName(e.target.value)}
+                      placeholder="Tu nombre" required className={inputCls} style={inputStyle}
+                      onFocus={e => e.target.style.borderColor = "var(--accent)"}
+                      onBlur={e => e.target.style.borderColor = "var(--border)"} />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Email</label>
+                  <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                    placeholder="tu@email.com" required className={inputCls} style={inputStyle}
+                    onFocus={e => e.target.style.borderColor = "var(--accent)"}
+                    onBlur={e => e.target.style.borderColor = "var(--border)"} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: "var(--text-secondary)" }}>Contraseña</label>
+                  <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                    placeholder={mode === "register" ? "Mínimo 6 caracteres" : "Tu contraseña"} required minLength={6}
+                    className={inputCls} style={inputStyle}
+                    onFocus={e => e.target.style.borderColor = "var(--accent)"}
+                    onBlur={e => e.target.style.borderColor = "var(--border)"} />
+                </div>
 
-            <button type="submit" disabled={loading}
-              className="w-full py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
-              style={{ background: "linear-gradient(135deg, var(--accent), #7c3aed)", color: "white" }}>
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Creando cuenta...
-                </span>
-              ) : `Unirme a ${org.name}`}
-            </button>
-          </form>
+                {error && (
+                  <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(239,68,68,0.1)", color: "var(--danger)", border: "1px solid rgba(239,68,68,0.2)" }}>
+                    {error}
+                  </div>
+                )}
 
-          <p className="mt-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-            ¿Ya tenés cuenta?{" "}
-            <a href="/login" className="hover:underline" style={{ color: "var(--accent-light)" }}>Iniciá sesión</a>
-          </p>
+                <button type="submit" disabled={loading}
+                  className="w-full py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, var(--accent), #7c3aed)", color: "white" }}>
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      {mode === "register" ? "Creando cuenta..." : "Ingresando..."}
+                    </span>
+                  ) : mode === "register" ? `Crear cuenta y unirme` : `Ingresar y unirme a ${org.name}`}
+                </button>
+              </form>
+
+              <div className="mt-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+                {mode === "register" ? (
+                  <>¿Ya tenés cuenta?{" "}
+                    <button onClick={() => { setMode("login"); setError("") }} className="font-medium hover:underline" style={{ color: "var(--accent-light)" }}>
+                      Iniciá sesión para unirte
+                    </button>
+                  </>
+                ) : (
+                  <>¿No tenés cuenta?{" "}
+                    <button onClick={() => { setMode("register"); setError("") }} className="font-medium hover:underline" style={{ color: "var(--accent-light)" }}>
+                      Registrate
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
+
+        <p className="text-center mt-6 text-xs" style={{ color: "var(--text-muted)" }}>
+          Arete Soluciones © {new Date().getFullYear()} ·{" "}
+          <a href="/legal" className="hover:underline" style={{ color: "var(--accent-light)" }}>Términos y Privacidad</a>
+        </p>
       </div>
     </div>
   )

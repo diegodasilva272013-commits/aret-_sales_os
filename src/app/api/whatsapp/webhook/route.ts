@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       })
 
       // Marcar como leído en WhatsApp
-      await fetch(`https://graph.facebook.com/v19.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+      await fetch(`https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

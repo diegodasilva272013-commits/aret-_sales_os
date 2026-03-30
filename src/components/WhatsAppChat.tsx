@@ -186,9 +186,9 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
 
       {/* Error */}
       {error && (
-        <p className="text-xs mb-2 px-3 py-2 rounded-lg" style={{ background: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
-          {error}
-        </p>
+        <div className="mb-2 px-3 py-2.5 rounded-lg" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)" }}>
+          <p className="text-xs font-medium" style={{ color: "#ef4444" }}>{error}</p>
+        </div>
       )}
 
       {/* Panel de mensajes generados */}

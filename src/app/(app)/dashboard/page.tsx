@@ -32,7 +32,7 @@ export default async function DashboardPage() {
     { data: allBusinesses },
     { data: setters },
   ] = await Promise.all([
-    supabase.from("profiles").select("full_name, role, is_owner, organizations(name, plan, analyses_used, plan_limit)").eq("id", user?.id || "").single(),
+    supabase.from("profiles").select("full_name, role, is_owner, organizations(name, plan, analyses_used, plan_limit, searches_used, search_limit)").eq("id", user?.id || "").single(),
     allProspectsQuery,
     supabase.from("prospects").select("id, status, follow_up_count").eq("assigned_to", user?.id || ""),
     recentProspectsQuery,
@@ -80,8 +80,9 @@ export default async function DashboardPage() {
   })).filter(s => s.count > 0).sort((a, b) => b.count - a.count)
 
   // Org info
-  const org = (profile as { organizations?: { name: string; plan: string; analyses_used: number; plan_limit: number } } | null)?.organizations
+  const org = (profile as { organizations?: { name: string; plan: string; analyses_used: number; plan_limit: number; searches_used?: number; search_limit?: number } } | null)?.organizations
   const usagePct = org ? Math.round((org.analyses_used / org.plan_limit) * 100) : 0
+  const searchUsagePct = org?.search_limit ? Math.round(((org.searches_used || 0) / org.search_limit) * 100) : 0
 
   const hora = new Date().getHours()
   const saludo = hora < 12 ? "Buenos días" : hora < 19 ? "Buenas tardes" : "Buenas noches"
@@ -220,9 +221,20 @@ export default async function DashboardPage() {
                 background: usagePct > 80 ? "linear-gradient(90deg,#f59e0b,#ef4444)" : "linear-gradient(90deg,var(--accent),#a78bfa)"
               }} />
             </div>
-            <p className="text-xs" style={{ color: usagePct > 80 ? "var(--warning)" : "var(--text-muted)" }}>
+            <p className="text-xs mb-4" style={{ color: usagePct > 80 ? "var(--warning)" : "var(--text-muted)" }}>
               {usagePct > 80 ? "⚠️ Cerca del límite" : `${100 - usagePct}% disponible`}
             </p>
+            {/* Búsquedas */}
+            <div className="flex items-end gap-2 mb-3">
+              <p className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>{org?.searches_used || 0}</p>
+              <p className="text-sm mb-0.5" style={{ color: "var(--text-muted)" }}>/ {org?.search_limit || 50} búsquedas</p>
+            </div>
+            <div className="w-full h-2 rounded-full mb-2" style={{ background: "var(--surface-2)" }}>
+              <div className="h-full rounded-full transition-all" style={{
+                width: `${Math.min(searchUsagePct, 100)}%`,
+                background: searchUsagePct > 80 ? "linear-gradient(90deg,#f59e0b,#ef4444)" : "linear-gradient(90deg,#22c55e,#10b981)"
+              }} />
+            </div>
             <Link href="/settings"
               className="mt-4 block text-center py-2 rounded-xl text-xs font-semibold"
               style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>

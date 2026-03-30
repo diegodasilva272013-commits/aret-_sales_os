@@ -119,9 +119,9 @@ export default async function RootPage() {
         <p className="text-center mb-12 text-sm" style={{ color: "var(--text-muted)" }}>Empezá gratis, escalá cuando lo necesités</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {[
-            { name: "Free", price: "$0", analyses: "50 análisis/mes", setters: "1 setter", color: "var(--surface)", highlight: false },
-            { name: "Pro", price: "$49", analyses: "200 análisis/mes", setters: "5 setters", color: "linear-gradient(135deg, rgba(108,99,255,0.15), rgba(124,58,237,0.15))", highlight: true },
-            { name: "Agency", price: "$150", analyses: "Ilimitado", setters: "Setters ilimitados", color: "var(--surface)", highlight: false },
+            { name: "Free", price: "$0", analyses: "50 análisis/mes", searches: "50 búsquedas/mes", setters: "1 setter", color: "var(--surface)", highlight: false },
+            { name: "Pro", price: "$49", analyses: "200 análisis/mes", searches: "200 búsquedas/mes", setters: "5 setters", color: "linear-gradient(135deg, rgba(108,99,255,0.15), rgba(124,58,237,0.15))", highlight: true },
+            { name: "Agency", price: "$150", analyses: "Ilimitado", searches: "Búsquedas ilimitadas", setters: "Setters ilimitados", color: "var(--surface)", highlight: false },
           ].map(plan => (
             <div key={plan.name} className="p-6 rounded-2xl relative"
               style={{ background: plan.color, border: plan.highlight ? "2px solid var(--accent)" : "1px solid var(--border)" }}>
@@ -136,6 +136,9 @@ export default async function RootPage() {
               <div className="mt-4 space-y-2 mb-6">
                 <p className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
                   <span style={{ color: "var(--success)" }}>✓</span> {plan.analyses}
+                </p>
+                <p className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
+                  <span style={{ color: "var(--success)" }}>✓</span> {plan.searches}
                 </p>
                 <p className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
                   <span style={{ color: "var(--success)" }}>✓</span> {plan.setters}

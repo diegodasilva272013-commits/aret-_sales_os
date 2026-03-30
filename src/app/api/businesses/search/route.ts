@@ -6,6 +6,15 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
+  // Verificar límite de búsquedas
+  const { data: profile } = await supabase.from("profiles").select("organization_id, organizations(searches_used, search_limit)").eq("id", user.id).single()
+  const org = profile?.organizations as { searches_used?: number; search_limit?: number } | null
+  if (org && typeof org.searches_used === "number" && typeof org.search_limit === "number") {
+    if (org.searches_used >= org.search_limit) {
+      return NextResponse.json({ error: "Límite de búsquedas alcanzado para tu plan. Actualizá tu plan para buscar más empresas." }, { status: 403 })
+    }
+  }
+
   const { query, location, country, pageToken, excludeIds = [] } = await req.json()
   if (!query || !location) return NextResponse.json({ error: "Tipo de empresa y ubicación requeridos" }, { status: 400 })
 
@@ -61,6 +70,11 @@ export async function POST(req: NextRequest) {
       city: location,
       country: country || "",
     }))
+
+  // Incrementar uso de búsquedas
+  if (profile?.organization_id) {
+    await supabase.rpc("increment_searches_used", { org_id: profile.organization_id }).catch(() => {})
+  }
 
   return NextResponse.json({
     businesses,

@@ -124,7 +124,7 @@ const navItems = [
   },
 ]
 
-type OrgInfo = { name: string; plan: string; analyses_used: number; plan_limit: number; logo_url?: string } | null
+type OrgInfo = { name: string; plan: string; analyses_used: number; plan_limit: number; searches_used?: number; search_limit?: number; logo_url?: string } | null
 
 export default function Sidebar({ profile, org, pendingFollowUps = 0, unreadMessages = 0 }: { profile: (SetterProfile & { is_owner?: boolean }) | null; org?: OrgInfo; pendingFollowUps?: number; unreadMessages?: number }) {
   const pathname = usePathname()

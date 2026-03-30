@@ -17,6 +17,8 @@ type OrgData = {
   plan: string
   analyses_used: number
   plan_limit: number
+  searches_used?: number
+  search_limit?: number
   logo_url?: string
   message_tone?: string
   message_style?: string
@@ -135,6 +137,7 @@ export default function SettingsClient({ profile, team, org, calendarConnected }
   }
 
   const usagePct = org ? Math.round((org.analyses_used / org.plan_limit) * 100) : 0
+  const searchUsagePct = org?.search_limit ? Math.round(((org.searches_used || 0) / org.search_limit) * 100) : 0
   const [upgrading, setUpgrading] = useState<string | null>(null)
 
   async function handleUpgrade(planKey: string) {
@@ -171,7 +174,7 @@ export default function SettingsClient({ profile, team, org, calendarConnected }
                 <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Plan actual</h2>
                 <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                   <span className="capitalize font-semibold" style={{ color: "var(--accent-light)" }}>{org.plan}</span>
-                  {" · "}{org.analyses_used} / {org.plan_limit} análisis usados este mes
+                  {" · "}{org.analyses_used} / {org.plan_limit} análisis · {org.searches_used || 0} / {org.search_limit || 50} búsquedas
                 </p>
               </div>
               <div className="flex gap-2">
@@ -204,15 +207,23 @@ export default function SettingsClient({ profile, team, org, calendarConnected }
                 )}
               </div>
             </div>
-            <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "var(--surface-2)" }}>
+            <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Análisis</p>
+            <div className="w-full h-2 rounded-full overflow-hidden mb-3" style={{ background: "var(--surface-2)" }}>
               <div className="h-full rounded-full transition-all" style={{
                 width: `${Math.min(usagePct, 100)}%`,
                 background: usagePct > 80 ? "linear-gradient(90deg,#f59e0b,#ef4444)" : "linear-gradient(90deg,var(--accent),#a78bfa)"
               }} />
             </div>
-            {usagePct > 80 && (
+            <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Búsquedas de empresas</p>
+            <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "var(--surface-2)" }}>
+              <div className="h-full rounded-full transition-all" style={{
+                width: `${Math.min(searchUsagePct, 100)}%`,
+                background: searchUsagePct > 80 ? "linear-gradient(90deg,#f59e0b,#ef4444)" : "linear-gradient(90deg,#22c55e,#10b981)"
+              }} />
+            </div>
+            {(usagePct > 80 || searchUsagePct > 80) && (
               <p className="text-xs mt-2" style={{ color: "#f59e0b" }}>
-                ⚠️ Usaste el {usagePct}% de tus análisis mensuales
+                ⚠️ Usaste el {Math.max(usagePct, searchUsagePct)}% de alguno de tus límites mensuales
               </p>
             )}
           </div>

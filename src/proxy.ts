@@ -28,6 +28,10 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login")
+  const isPublicRoute = request.nextUrl.pathname.startsWith("/auth/")
+    || request.nextUrl.pathname.startsWith("/legal")
+    || request.nextUrl.pathname.startsWith("/onboarding")
+    || request.nextUrl.pathname.startsWith("/join")
   const isWebhook = request.nextUrl.pathname.startsWith("/api/whatsapp/webhook")
     || request.nextUrl.pathname.startsWith("/api/calls/twiml")
     || request.nextUrl.pathname.startsWith("/api/calls/recording")
@@ -36,8 +40,9 @@ export async function proxy(request: NextRequest) {
     || request.nextUrl.pathname === "/join.html"
     || request.nextUrl.pathname.startsWith("/api/video/composition")
     || request.nextUrl.pathname.startsWith("/api/video/upload")
+    || request.nextUrl.pathname.startsWith("/api/stripe")
 
-  if (!user && !isAuthPage && !isWebhook) {
+  if (!user && !isAuthPage && !isPublicRoute && !isWebhook) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)

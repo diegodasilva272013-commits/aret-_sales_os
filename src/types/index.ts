@@ -3,7 +3,7 @@ export type SetterProfile = {
   email: string
   full_name: string
   avatar_url?: string
-  role: "admin" | "setter"
+  role: "admin" | "setter" | "closer"
   created_at: string
 }
 

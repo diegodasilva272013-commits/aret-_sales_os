@@ -4,12 +4,24 @@ import ProspectsTable from "@/components/ProspectsTable"
 
 export default async function ProspectsPage() {
   const supabase = await createClient()
-  const { data: prospects } = await supabase
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id, is_owner")
+    .eq("id", user?.id || "")
+    .single()
+
+  let query = supabase
     .from("prospects")
     .select("*, profiles!assigned_to(full_name, email)")
     .order("created_at", { ascending: false })
 
-  const { data: { user } } = await supabase.auth.getUser()
+  if (!profile?.is_owner) {
+    query = query.eq("assigned_to", user?.id || "")
+  }
+
+  const { data: prospects } = await query
 
   return (
     <div className="min-h-screen p-8" style={{ background: "var(--background)" }}>

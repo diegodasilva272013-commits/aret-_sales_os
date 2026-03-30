@@ -4,10 +4,24 @@ import BusinessesClient from "@/components/BusinessesClient"
 
 export default async function BusinessesPage() {
   const supabase = await createClient()
-  const { data: businesses, error } = await supabase
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id, is_owner")
+    .eq("id", user?.id || "")
+    .single()
+
+  let query = supabase
     .from("businesses")
     .select("*, profiles!assigned_to(full_name), business_analyses(id)")
     .order("created_at", { ascending: false })
+
+  if (!profile?.is_owner) {
+    query = query.eq("assigned_to", user?.id || "")
+  }
+
+  const { data: businesses, error } = await query
 
   if (error) {
     return (

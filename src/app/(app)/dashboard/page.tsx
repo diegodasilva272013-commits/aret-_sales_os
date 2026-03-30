@@ -5,6 +5,25 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  const { data: profileCheck } = await supabase
+    .from("profiles")
+    .select("is_owner")
+    .eq("id", user?.id || "")
+    .single()
+
+  const isOwner = profileCheck?.is_owner || false
+
+  // Queries base - non-owners solo ven lo suyo
+  let allProspectsQuery = supabase.from("prospects").select("id, status, phase, follow_up_count, assigned_to, created_at, source_type")
+  let recentProspectsQuery = supabase.from("prospects").select("*, profiles!assigned_to(full_name)").order("created_at", { ascending: false }).limit(6)
+  let allBusinessesQuery = supabase.from("businesses").select("id, status, follow_up_count, created_at")
+
+  if (!isOwner) {
+    allProspectsQuery = allProspectsQuery.eq("assigned_to", user?.id || "")
+    recentProspectsQuery = recentProspectsQuery.eq("assigned_to", user?.id || "")
+    allBusinessesQuery = allBusinessesQuery.eq("assigned_to", user?.id || "")
+  }
+
   const [
     { data: profile },
     { data: allProspects },
@@ -13,12 +32,12 @@ export default async function DashboardPage() {
     { data: allBusinesses },
     { data: setters },
   ] = await Promise.all([
-    supabase.from("profiles").select("full_name, role, organizations(name, plan, analyses_used, plan_limit)").eq("id", user?.id || "").single(),
-    supabase.from("prospects").select("id, status, phase, follow_up_count, assigned_to, created_at, source_type"),
+    supabase.from("profiles").select("full_name, role, is_owner, organizations(name, plan, analyses_used, plan_limit)").eq("id", user?.id || "").single(),
+    allProspectsQuery,
     supabase.from("prospects").select("id, status, follow_up_count").eq("assigned_to", user?.id || ""),
-    supabase.from("prospects").select("*, profiles!assigned_to(full_name)").order("created_at", { ascending: false }).limit(6),
-    supabase.from("businesses").select("id, status, follow_up_count, created_at"),
-    supabase.from("profiles").select("id, full_name").order("full_name"),
+    recentProspectsQuery,
+    allBusinessesQuery,
+    isOwner ? supabase.from("profiles").select("id, full_name").order("full_name") : Promise.resolve({ data: [] }),
   ])
 
   // Métricas reales
@@ -39,11 +58,19 @@ export default async function DashboardPage() {
   const startOfMonth = new Date(); startOfMonth.setDate(1); startOfMonth.setHours(0,0,0,0)
   const prospectosEstaSemana = prospects.filter(p => new Date(p.created_at) >= startOfWeek).length
   const prospectosMes = prospects.filter(p => new Date(p.created_at) >= startOfMonth).length
-  const llamadasHoy = await supabase.from("scheduled_calls").select("id", { count: "exact", head: true })
+  const llamadasHoyQuery = supabase.from("scheduled_calls").select("id", { count: "exact", head: true })
     .gte("scheduled_at", new Date().toISOString().split("T")[0])
     .lt("scheduled_at", new Date(Date.now() + 86400000).toISOString().split("T")[0])
-  const llamadasSemana = await supabase.from("scheduled_calls").select("id", { count: "exact", head: true })
+  const llamadasSemanaQuery = supabase.from("scheduled_calls").select("id", { count: "exact", head: true })
     .gte("scheduled_at", startOfWeek.toISOString())
+
+  if (!isOwner) {
+    llamadasHoyQuery.eq("setter_id", user?.id || "")
+    llamadasSemanaQuery.eq("setter_id", user?.id || "")
+  }
+
+  const llamadasHoy = await llamadasHoyQuery
+  const llamadasSemana = await llamadasSemanaQuery
 
   // Por setter
   const setterStats = (setters || []).map(s => ({
@@ -121,7 +148,7 @@ export default async function DashboardPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className={`grid ${isOwner ? "grid-cols-3" : "grid-cols-2"} gap-4 mb-6`}>
           {/* Fase distribution */}
           <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
             <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Pipeline por Fase</h3>
@@ -151,8 +178,8 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Setters ranking */}
-          <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          {/* Setters ranking - solo visible para owners */}
+          {isOwner && <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
             <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Ranking Setters</h3>
             {setterStats.length === 0 ? (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>Sin datos todavía</p>
@@ -177,7 +204,7 @@ export default async function DashboardPage() {
                 </div>
               </div>
             ))}
-          </div>
+          </div>}
 
           {/* Plan usage */}
           <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>

@@ -23,6 +23,7 @@ export default function VideoRoom({ roomName, isProspect = false, prospectName }
   const [duration, setDuration] = useState(0)
   const [debugLog, setDebugLog] = useState<string[]>([])
   const [hydrated, setHydrated] = useState(false)
+  const [localVideoTrack, setLocalVideoTrack] = useState<any>(null)
 
   useEffect(() => { setHydrated(true) }, [])
 
@@ -78,11 +79,9 @@ export default function VideoRoom({ roomName, isProspect = false, prospectName }
       setJoined(true)
       timerRef.current = setInterval(() => setDuration(d => d + 1), 1000)
 
-      // Video local
+      // Guardar track local para attach en useEffect (el ref aún no existe)
       room.localParticipant.videoTracks.forEach((pub: any) => {
-        if (localVideoRef.current && pub.track) {
-          pub.track.attach(localVideoRef.current)
-        }
+        if (pub.track) setLocalVideoTrack(pub.track)
       })
 
       // Participantes remotos existentes
@@ -159,6 +158,13 @@ export default function VideoRoom({ roomName, isProspect = false, prospectName }
   }
 
   useEffect(() => () => { roomRef.current?.disconnect(); if (timerRef.current) clearInterval(timerRef.current) }, [])
+
+  // Attach local video track una vez que el elemento <video> existe en el DOM
+  useEffect(() => {
+    if (localVideoTrack && localVideoRef.current) {
+      localVideoTrack.attach(localVideoRef.current)
+    }
+  }, [localVideoTrack, joined])
 
   // Pantalla de espera / join
   if (!joined) {

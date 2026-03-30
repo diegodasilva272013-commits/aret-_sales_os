@@ -30,8 +30,9 @@ export async function POST(req: NextRequest) {
     await adminSupabase.from("businesses").update({ assigned_to: null }).eq("assigned_to", setterId)
   }
 
-  // Desvincular de la org
-  await adminSupabase.from("profiles").update({ organization_id: null, is_owner: false, role: "setter" }).eq("id", setterId)
+  // Borrar perfil y usuario de Auth completamente
+  await adminSupabase.from("profiles").delete().eq("id", setterId)
+  await adminSupabase.auth.admin.deleteUser(setterId)
 
   return NextResponse.json({ success: true })
 }

@@ -47,6 +47,21 @@ export async function POST(req: NextRequest) {
 
   if (createError) {
     if (createError.message.includes("already been registered")) {
+      // Usuario ya existe en Auth - buscar y re-vincular a la org
+      const { data: { users } } = await adminSupabase.auth.admin.listUsers()
+      const existing = users?.find(u => u.email === email)
+      if (existing) {
+        await adminSupabase.auth.admin.updateUserById(existing.id, { password, email_confirm: true })
+        await adminSupabase.from("profiles").upsert({
+          id: existing.id,
+          email,
+          full_name: fullName,
+          role,
+          organization_id: profile.organization_id,
+          is_owner: false,
+        })
+        return NextResponse.json({ success: true, userId: existing.id })
+      }
       return NextResponse.json({ error: "Ya existe un usuario con ese email" }, { status: 409 })
     }
     return NextResponse.json({ error: createError.message }, { status: 500 })

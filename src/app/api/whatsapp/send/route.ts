@@ -94,8 +94,8 @@ export async function POST(req: NextRequest) {
 
   const messageContent = useTemplate ? `[Template: ${templateName}]` : message
 
-  // Guardar en DB
-  await supabase.from("whatsapp_messages").insert({
+  // Guardar en DB y devolver el registro creado
+  const { data: savedMsg } = await supabase.from("whatsapp_messages").insert({
     prospect_id: prospectId,
     organization_id: profile?.organization_id,
     whatsapp_message_id: data.messages?.[0]?.id,
@@ -104,12 +104,12 @@ export async function POST(req: NextRequest) {
     to_number: `+${cleanNumber}`,
     content: messageContent,
     status: "sent",
-  })
+  }).select().single()
 
   // Actualizar número del prospecto
   await supabase.from("prospects")
     .update({ whatsapp_number: `+${cleanNumber}`, last_contact_at: new Date().toISOString() })
     .eq("id", prospectId)
 
-  return NextResponse.json({ ok: true, messageId: data.messages?.[0]?.id })
+  return NextResponse.json({ ok: true, messageId: data.messages?.[0]?.id, message: savedMsg })
 }

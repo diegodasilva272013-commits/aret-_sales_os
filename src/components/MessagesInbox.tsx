@@ -77,8 +77,39 @@ export default function MessagesInbox({ conversations, orgId }: { conversations:
       })
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
-  }, [])
+    // Polling cada 8s como fallback para inbox
+    const pollInbox = async () => {
+      const { data } = await supabase
+        .from("whatsapp_messages")
+        .select(`
+          id, content, direction, status, created_at, prospect_id,
+          prospects!prospect_id(id, full_name, company, headline, whatsapp_number, status)
+        `)
+        .eq("organization_id", orgId)
+        .order("created_at", { ascending: false })
+        .limit(200)
+
+      if (data && data.length > 0) {
+        // Re-agrupar por prospect, quedarse con el último mensaje
+        const seen = new Set<string>()
+        const fresh: Conversation[] = []
+        for (const msg of data) {
+          const pid = (msg as { prospect_id: string }).prospect_id
+          if (!seen.has(pid)) {
+            seen.add(pid)
+            fresh.push(msg as unknown as Conversation)
+          }
+        }
+        setConvos(fresh)
+      }
+    }
+    const pollInterval = setInterval(pollInbox, 8000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(pollInterval)
+    }
+  }, [orgId])
 
   const filtered = convos.filter(c => {
     const name = c.prospects?.full_name?.toLowerCase() || ""

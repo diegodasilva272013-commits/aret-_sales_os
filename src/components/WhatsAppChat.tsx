@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 type WaMessage = {
@@ -42,6 +42,23 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
   const [error, setError] = useState("")
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // Función para cargar mensajes desde DB (deduplicando por id)
+  const loadMessages = useCallback(async () => {
+    const { data } = await supabase.from("whatsapp_messages")
+      .select("id, direction, content, status, created_at")
+      .eq("prospect_id", prospectId)
+      .order("created_at")
+    if (data && data.length > 0) {
+      setMessages(prev => {
+        // Merge: mantener mensajes existentes y agregar nuevos
+        const ids = new Set(prev.map(m => m.id))
+        const newMsgs = (data as WaMessage[]).filter(m => !ids.has(m.id))
+        if (newMsgs.length === 0) return prev
+        return [...prev, ...newMsgs].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      })
+    }
+  }, [prospectId])
+
   useEffect(() => {
     supabase.from("generated_messages")
       .select("id, content, follow_up_number, message_type")
@@ -52,11 +69,7 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
 
   useEffect(() => {
     // Cargar mensajes históricos
-    supabase.from("whatsapp_messages")
-      .select("*")
-      .eq("prospect_id", prospectId)
-      .order("created_at")
-      .then(({ data }) => setMessages((data || []) as WaMessage[]))
+    loadMessages()
 
     // Suscribirse a mensajes nuevos en tiempo real
     const channel = supabase
@@ -67,12 +80,23 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
         table: "whatsapp_messages",
         filter: `prospect_id=eq.${prospectId}`,
       }, payload => {
-        setMessages(prev => [...prev, payload.new as WaMessage])
+        const newMsg = payload.new as WaMessage
+        setMessages(prev => {
+          // Evitar duplicados (por optimistic update o polling)
+          if (prev.some(m => m.id === newMsg.id)) return prev
+          return [...prev, newMsg]
+        })
       })
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
-  }, [prospectId])
+    // Polling cada 5s como fallback si Realtime no funciona
+    const pollInterval = setInterval(loadMessages, 5000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(pollInterval)
+    }
+  }, [prospectId, loadMessages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -82,16 +106,36 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
     if (!input.trim() || !phone) return
     setSending(true)
     setError("")
+    const messageText = input.trim()
 
     const res = await fetch("/api/whatsapp/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prospectId, message: input.trim(), toNumber: phone }),
+      body: JSON.stringify({ prospectId, message: messageText, toNumber: phone }),
     })
     const data = await res.json()
 
-    if (!res.ok) setError(data.error || "Error al enviar")
-    else setInput("")
+    if (!res.ok) {
+      setError(data.error || "Error al enviar")
+    } else {
+      setInput("")
+      // Optimistic update: agregar el mensaje devuelto por la API o uno temporal
+      if (data.message) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === data.message.id)) return prev
+          return [...prev, data.message as WaMessage]
+        })
+      } else {
+        // Fallback: agregar mensaje temporal
+        setMessages(prev => [...prev, {
+          id: `temp-${Date.now()}`,
+          direction: "outbound",
+          content: messageText,
+          status: "sent",
+          created_at: new Date().toISOString(),
+        }])
+      }
+    }
 
     setSending(false)
   }

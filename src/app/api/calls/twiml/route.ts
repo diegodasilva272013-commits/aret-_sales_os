@@ -10,7 +10,10 @@ export async function POST(req: NextRequest) {
   const twiml = new twilio.twiml.VoiceResponse()
 
   if (to) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    // En producción usar el host del request, no NEXT_PUBLIC_APP_URL (que puede ser localhost)
+    const host = req.headers.get("host") || ""
+    const protocol = host.includes("localhost") ? "http" : "https"
+    const appUrl = `${protocol}://${host}`
     const prospectId = params.get("prospectId") || ""
     const userId = params.get("userId") || ""
     const orgId = params.get("orgId") || ""

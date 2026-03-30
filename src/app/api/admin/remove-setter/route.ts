@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -13,14 +14,24 @@ export async function POST(req: NextRequest) {
   const { setterId, reassignTo } = await req.json()
   if (!setterId) return NextResponse.json({ error: "setterId requerido" }, { status: 400 })
 
-  // Reasignar prospectos
+  // Usar service role para bypasear RLS
+  const adminSupabase = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  // Reasignar prospectos y empresas
   if (reassignTo) {
-    await supabase.from("prospects").update({ assigned_to: reassignTo }).eq("assigned_to", setterId)
-    await supabase.from("businesses").update({ assigned_to: reassignTo }).eq("assigned_to", setterId)
+    await adminSupabase.from("prospects").update({ assigned_to: reassignTo }).eq("assigned_to", setterId)
+    await adminSupabase.from("businesses").update({ assigned_to: reassignTo }).eq("assigned_to", setterId)
+  } else {
+    // Sin reasignar: dejar assigned_to en null
+    await adminSupabase.from("prospects").update({ assigned_to: null }).eq("assigned_to", setterId)
+    await adminSupabase.from("businesses").update({ assigned_to: null }).eq("assigned_to", setterId)
   }
 
-  // Desvincular de la org (no borramos el usuario de Supabase Auth)
-  await supabase.from("profiles").update({ organization_id: null, is_owner: false }).eq("id", setterId)
+  // Desvincular de la org
+  await adminSupabase.from("profiles").update({ organization_id: null, is_owner: false, role: "setter" }).eq("id", setterId)
 
   return NextResponse.json({ success: true })
 }

@@ -412,7 +412,7 @@ export default function VideoClient({ recordings, analyses, prospects }: {
               Enviar por WhatsApp
             </a>
 
-            <button onClick={() => { window.open(`/join.html?room=${videoRoomName}`, "_blank"); setShowModal(false) }}
+            <button onClick={() => { window.open(`/videollamada/${videoRoomName}`, "_blank"); setShowModal(false) }}
               className="w-full py-3 rounded-xl font-semibold text-sm mb-2"
               style={{ background: "linear-gradient(135deg, #6c63ff, #7c3aed)", color: "white" }}>
               Unirme a la llamada

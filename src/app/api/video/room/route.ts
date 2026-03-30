@@ -12,6 +12,10 @@ export async function POST(req: NextRequest) {
 
   const { prospectId } = await req.json()
 
+  const host = req.headers.get("host") || ""
+  const protocol = host.includes("localhost") ? "http" : "https"
+  const appUrl = `${protocol}://${host}`
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("organization_id, full_name")
@@ -27,7 +31,7 @@ export async function POST(req: NextRequest) {
       uniqueName: roomName,
       type: "group-small",
       recordParticipantsOnConnect: true,
-      statusCallback: `${process.env.NEXT_PUBLIC_APP_URL}/api/video/composition?prospectId=${prospectId || ""}&orgId=${profile?.organization_id || ""}`,
+      statusCallback: `${appUrl}/api/video/composition?prospectId=${prospectId || ""}&orgId=${profile?.organization_id || ""}`,
       statusCallbackMethod: "POST",
     })
   } catch (e) {
@@ -50,8 +54,7 @@ export async function POST(req: NextRequest) {
     status: "waiting",
   })
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  const prospectLink = `${appUrl}/join.html?room=${roomName}`
+  const prospectLink = `${appUrl}/videollamada/${roomName}`
 
   return NextResponse.json({ token: token.toJwt(), roomName, prospectLink })
 }

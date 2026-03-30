@@ -48,11 +48,14 @@ export async function POST(req: NextRequest) {
       // Crear composición de video para reproducción
       let compositionSid = ""
       try {
+        const host = req.headers.get("host") || ""
+        const cbProtocol = host.includes("localhost") ? "http" : "https"
+        const cbUrl = `${cbProtocol}://${host}`
         const composition = await client.video.v1.compositions.create({
           roomSid,
           audioSources: ["*"],
           videoLayout: { grid: { video_sources: ["*"] } },
-          statusCallback: `${process.env.NEXT_PUBLIC_APP_URL}/api/video/composition-ready`,
+          statusCallback: `${cbUrl}/api/video/composition-ready`,
           statusCallbackMethod: "POST",
           format: "mp4",
         })

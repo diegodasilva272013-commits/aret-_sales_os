@@ -36,29 +36,56 @@ export async function POST(req: NextRequest) {
   try {
     // 1. Subir audio a WhatsApp Media API
     const audioBuffer = Buffer.from(await audio.arrayBuffer())
-    const uploadForm = new FormData()
-    uploadForm.append("messaging_product", "whatsapp")
-    uploadForm.append("file", new Blob([audioBuffer], { type: "audio/webm" }), "audio.webm")
-    uploadForm.append("type", "audio/webm")
+    
+    // Construir multipart manualmente para compatibilidad con Graph API en serverless
+    const boundary = "----WhatsAppMediaBoundary" + Date.now()
+    const parts: Buffer[] = []
+
+    // Part: messaging_product
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="messaging_product"\r\n\r\nwhatsapp\r\n`
+    ))
+
+    // Part: type 
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="type"\r\n\r\naudio/ogg; codecs=opus\r\n`
+    ))
+
+    // Part: file (binary)
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="audio.ogg"\r\nContent-Type: audio/ogg; codecs=opus\r\n\r\n`
+    ))
+    parts.push(audioBuffer)
+    parts.push(Buffer.from(`\r\n--${boundary}--\r\n`))
+
+    const body = Buffer.concat(parts)
+
+    console.log("[send-audio] Uploading media, size:", audioBuffer.length, "bytes")
 
     const uploadRes = await fetch(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/media`,
       {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: uploadForm,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        },
+        body,
       }
     )
     const uploadData = await uploadRes.json()
 
+    console.log("[send-audio] Upload response:", uploadRes.status, JSON.stringify(uploadData))
+
     if (!uploadRes.ok) {
       console.error("WhatsApp media upload error:", JSON.stringify(uploadData))
-      return NextResponse.json({ error: uploadData.error?.message || "Error subiendo audio" }, { status: 400 })
+      return NextResponse.json({ error: uploadData.error?.message || "Error subiendo audio", details: uploadData }, { status: 400 })
     }
 
     const mediaId = uploadData.id
 
-    // 2. Enviar mensaje de audio con el media ID
+    console.log("[send-audio] Sending audio message with mediaId:", mediaId, "to:", cleanNumber)
+
     const msgRes = await fetch(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
       {
@@ -76,6 +103,7 @@ export async function POST(req: NextRequest) {
       }
     )
     const msgData = await msgRes.json()
+    console.log("[send-audio] Message response:", msgRes.status, JSON.stringify(msgData))
 
     if (!msgRes.ok) {
       console.error("WhatsApp send audio error:", JSON.stringify(msgData))
@@ -83,7 +111,7 @@ export async function POST(req: NextRequest) {
       if (errCode === 190) {
         return NextResponse.json({ error: "Token de WhatsApp expirado" }, { status: 401 })
       }
-      return NextResponse.json({ error: msgData.error?.message || "Error enviando audio" }, { status: 400 })
+      return NextResponse.json({ error: msgData.error?.message || "Error enviando audio", details: msgData }, { status: 400 })
     }
 
     // 3. Guardar audio en Supabase Storage

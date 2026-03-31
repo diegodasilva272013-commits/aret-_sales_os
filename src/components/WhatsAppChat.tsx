@@ -29,6 +29,75 @@ const FOLLOWUP_LABELS: Record<number, string> = {
   5: "Seguimiento 5 / Cierre",
 }
 
+function AudioBubble({ src, outbound }: { src: string; outbound: boolean }) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [duration, setDuration] = useState(0)
+
+  const toggle = () => {
+    if (!audioRef.current) return
+    if (playing) { audioRef.current.pause() } else { audioRef.current.play() }
+  }
+
+  const fmtTime = (s: number) => {
+    if (!s || !isFinite(s)) return "0:00"
+    const m = Math.floor(s / 60)
+    const sec = Math.floor(s % 60)
+    return `${m}:${sec.toString().padStart(2, "0")}`
+  }
+
+  // Simulated waveform bars
+  const bars = [3,5,8,4,7,10,6,9,4,7,5,8,3,6,9,5,7,4,8,6,10,5,7,3,8,6,4,9,5,7]
+
+  return (
+    <div className="flex items-center gap-2.5 min-w-[240px]">
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
+        onTimeUpdate={() => {
+          const a = audioRef.current
+          if (a && a.duration) setProgress(a.currentTime / a.duration)
+        }}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setProgress(0) }}
+      />
+      <button onClick={toggle} className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-transform active:scale-90"
+        style={{ background: outbound ? "rgba(255,255,255,0.2)" : "var(--accent)" }}>
+        {playing ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="6,4 20,12 6,20"/></svg>
+        )}
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-end gap-[2px] h-[28px]">
+          {bars.map((h, i) => {
+            const pct = i / bars.length
+            const active = pct <= progress
+            return (
+              <div key={i} className="flex-1 rounded-full transition-all duration-100"
+                style={{
+                  height: `${h * 2.5}px`,
+                  background: active
+                    ? (outbound ? "rgba(255,255,255,0.9)" : "var(--accent)")
+                    : (outbound ? "rgba(255,255,255,0.3)" : "var(--border-light)"),
+                  minWidth: "2px",
+                }} />
+            )
+          })}
+        </div>
+        <span className="text-[10px] mt-0.5 block" style={{ color: outbound ? "rgba(255,255,255,0.7)" : "var(--text-muted)" }}>
+          {playing ? fmtTime(audioRef.current?.currentTime || 0) : fmtTime(duration)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber }: {
   prospectId: string
   prospectName: string
@@ -195,9 +264,11 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
 
         const res = await fetch("/api/whatsapp/send-audio", { method: "POST", body: formData })
         const data = await res.json()
+        console.log("[WhatsApp] send-audio response:", res.status, JSON.stringify(data))
 
         if (!res.ok) {
           setError(data.error || "Error enviando audio")
+          console.error("[WhatsApp] send-audio error:", data)
         } else if (data.message) {
           setMessages(prev => {
             if (prev.some(m => m.id === data.message.id)) return prev
@@ -318,6 +389,16 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
               {group.msgs.map(msg => (
                 <div key={msg.id} className={`flex mb-2 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
                   <div className="max-w-xs lg:max-w-md">
+                    {msg.media_type === "audio" && msg.media_url ? (
+                      <div className="px-3 py-2.5 rounded-2xl"
+                        style={{
+                          background: msg.direction === "outbound" ? "#25d366" : "var(--surface)",
+                          borderRadius: msg.direction === "outbound" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                          border: msg.direction === "inbound" ? "1px solid var(--border)" : "none",
+                        }}>
+                        <AudioBubble src={msg.media_url} outbound={msg.direction === "outbound"} />
+                      </div>
+                    ) : (
                     <div className="px-4 py-2.5 rounded-2xl text-sm"
                       style={{
                         background: msg.direction === "outbound" ? "#25d366" : "var(--surface)",
@@ -326,11 +407,6 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
                         border: msg.direction === "inbound" ? "1px solid var(--border)" : "none",
                       }}>
                       <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                      {msg.media_type === "audio" && msg.media_url && (
-                        <audio controls preload="none" className="mt-1.5 w-full max-w-[240px]" style={{ height: "36px" }}>
-                          <source src={msg.media_url} />
-                        </audio>
-                      )}
                       {msg.media_type === "image" && msg.media_url && (
                         <img src={msg.media_url} alt="Imagen" className="mt-1.5 rounded-lg max-w-[240px] max-h-[200px] object-cover" />
                       )}
@@ -340,6 +416,7 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
                         </video>
                       )}
                     </div>
+                    )}
                     <div className={`flex items-center gap-1 mt-0.5 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
                       <span className="text-xs" style={{ color: "var(--text-muted)" }}>{formatTime(msg.created_at)}</span>
                       {msg.direction === "outbound" && (

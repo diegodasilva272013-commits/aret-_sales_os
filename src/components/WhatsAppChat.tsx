@@ -115,9 +115,13 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
   const [loading, setLoading] = useState(true)
   const [recording, setRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
+  const [attachedFile, setAttachedFile] = useState<File | null>(null)
+  const [attachPreview, setAttachPreview] = useState<string | null>(null)
+  const [caption, setCaption] = useState("")
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Función para cargar mensajes desde DB (reemplaza todo para capturar status updates)
@@ -314,6 +318,83 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
     return `${m}:${s.toString().padStart(2, "0")}`
   }
 
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // Max 16MB (WhatsApp limit)
+    if (file.size > 16 * 1024 * 1024) {
+      setError("El archivo es muy grande. Máximo 16MB.")
+      return
+    }
+    setAttachedFile(file)
+    setCaption("")
+    if (file.type.startsWith("image/")) {
+      const url = URL.createObjectURL(file)
+      setAttachPreview(url)
+    } else if (file.type.startsWith("video/")) {
+      const url = URL.createObjectURL(file)
+      setAttachPreview(url)
+    } else {
+      setAttachPreview(null)
+    }
+    // Reset input so same file can be selected again
+    e.target.value = ""
+  }
+
+  function cancelAttachment() {
+    if (attachPreview) URL.revokeObjectURL(attachPreview)
+    setAttachedFile(null)
+    setAttachPreview(null)
+    setCaption("")
+  }
+
+  async function sendAttachment() {
+    if (!attachedFile || !phone) return
+    setSending(true)
+    setError("")
+
+    const formData = new FormData()
+    formData.append("file", attachedFile)
+    formData.append("prospectId", prospectId)
+    formData.append("toNumber", phone)
+    if (caption.trim()) formData.append("caption", caption.trim())
+
+    try {
+      const res = await fetch("/api/whatsapp/send-media", { method: "POST", body: formData })
+      const data = await res.json()
+      console.log("[WhatsApp] send-media response:", res.status, JSON.stringify(data))
+
+      if (!res.ok) {
+        setError(data.error || "Error enviando archivo")
+      } else if (data.message) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === data.message.id)) return prev
+          return [...prev, data.message as WaMessage]
+        })
+        cancelAttachment()
+      }
+    } catch {
+      setError("Error enviando archivo")
+    }
+    setSending(false)
+  }
+
+  function getFileIcon(name: string) {
+    const ext = name.split(".").pop()?.toLowerCase() || ""
+    if (["pdf"].includes(ext)) return "📄"
+    if (["doc", "docx"].includes(ext)) return "📝"
+    if (["xls", "xlsx"].includes(ext)) return "📊"
+    if (["ppt", "pptx"].includes(ext)) return "📑"
+    if (["txt"].includes(ext)) return "📃"
+    return "📎"
+  }
+
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
   function formatTime(iso: string) {
     return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
   }
@@ -398,6 +479,65 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
                         }}>
                         <AudioBubble src={msg.media_url} outbound={msg.direction === "outbound"} />
                       </div>
+                    ) : msg.media_type === "image" && msg.media_url ? (
+                      <div className="rounded-2xl overflow-hidden"
+                        style={{
+                          background: msg.direction === "outbound" ? "#25d366" : "var(--surface)",
+                          borderRadius: msg.direction === "outbound" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                          border: msg.direction === "inbound" ? "1px solid var(--border)" : "none",
+                        }}>
+                        <img src={msg.media_url} alt="Imagen" className="max-w-[280px] max-h-[240px] object-cover cursor-pointer"
+                          onClick={() => window.open(msg.media_url, "_blank")} />
+                        {msg.content && msg.content !== "[Imagen]" && (
+                          <p className="px-3 py-2 text-sm whitespace-pre-wrap"
+                            style={{ color: msg.direction === "outbound" ? "white" : "var(--text-primary)" }}>
+                            {msg.content}
+                          </p>
+                        )}
+                      </div>
+                    ) : msg.media_type === "video" && msg.media_url ? (
+                      <div className="rounded-2xl overflow-hidden"
+                        style={{
+                          background: msg.direction === "outbound" ? "#25d366" : "var(--surface)",
+                          borderRadius: msg.direction === "outbound" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                          border: msg.direction === "inbound" ? "1px solid var(--border)" : "none",
+                        }}>
+                        <video controls preload="none" className="max-w-[280px] rounded-t-2xl">
+                          <source src={msg.media_url} />
+                        </video>
+                        {msg.content && msg.content !== "[Video]" && (
+                          <p className="px-3 py-2 text-sm whitespace-pre-wrap"
+                            style={{ color: msg.direction === "outbound" ? "white" : "var(--text-primary)" }}>
+                            {msg.content}
+                          </p>
+                        )}
+                      </div>
+                    ) : msg.media_type === "document" && msg.media_url ? (
+                      <div className="px-3 py-2.5 rounded-2xl"
+                        style={{
+                          background: msg.direction === "outbound" ? "#25d366" : "var(--surface)",
+                          borderRadius: msg.direction === "outbound" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                          border: msg.direction === "inbound" ? "1px solid var(--border)" : "none",
+                        }}>
+                        <a href={msg.media_url} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all"
+                          style={{ background: msg.direction === "outbound" ? "rgba(255,255,255,0.15)" : "var(--surface-2)" }}>
+                          <span className="text-2xl shrink-0">📄</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate"
+                              style={{ color: msg.direction === "outbound" ? "white" : "var(--text-primary)" }}>
+                              {msg.content && msg.content !== "[Documento]" ? msg.content : "Documento"}
+                            </p>
+                            <p className="text-xs" style={{ color: msg.direction === "outbound" ? "rgba(255,255,255,0.6)" : "var(--text-muted)" }}>
+                              Toca para descargar
+                            </p>
+                          </div>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke={msg.direction === "outbound" ? "rgba(255,255,255,0.7)" : "var(--text-muted)"} strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                          </svg>
+                        </a>
+                      </div>
                     ) : (
                     <div className="px-4 py-2.5 rounded-2xl text-sm"
                       style={{
@@ -407,14 +547,6 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
                         border: msg.direction === "inbound" ? "1px solid var(--border)" : "none",
                       }}>
                       <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                      {msg.media_type === "image" && msg.media_url && (
-                        <img src={msg.media_url} alt="Imagen" className="mt-1.5 rounded-lg max-w-[240px] max-h-[200px] object-cover" />
-                      )}
-                      {msg.media_type === "video" && msg.media_url && (
-                        <video controls preload="none" className="mt-1.5 rounded-lg max-w-[240px]">
-                          <source src={msg.media_url} />
-                        </video>
-                      )}
                     </div>
                     )}
                     <div className={`flex items-center gap-1 mt-0.5 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
@@ -464,6 +596,64 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
         </div>
       )}
 
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept="image/jpeg,image/png,image/webp,video/mp4,video/3gpp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain"
+        onChange={handleFileSelect}
+      />
+
+      {/* File preview panel */}
+      {attachedFile && (
+        <div className="mb-2 rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)", background: "var(--surface)" }}>
+          <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
+            <span className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>Archivo adjunto</span>
+            <button onClick={cancelAttachment} className="text-xs" style={{ color: "var(--text-muted)" }}>✕</button>
+          </div>
+          <div className="p-3">
+            {attachedFile.type.startsWith("image/") && attachPreview ? (
+              <img src={attachPreview} alt="Preview" className="max-h-40 rounded-lg object-contain mx-auto" />
+            ) : attachedFile.type.startsWith("video/") && attachPreview ? (
+              <video src={attachPreview} controls className="max-h-40 rounded-lg mx-auto" />
+            ) : (
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: "var(--surface-2)" }}>
+                <span className="text-2xl">{getFileIcon(attachedFile.name)}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>{attachedFile.name}</p>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>{formatFileSize(attachedFile.size)}</p>
+                </div>
+              </div>
+            )}
+            <input
+              value={caption}
+              onChange={e => setCaption(e.target.value)}
+              placeholder="Agregar un mensaje... (opcional)"
+              className="w-full mt-2 px-3 py-2 rounded-lg text-sm outline-none"
+              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); sendAttachment() } }}
+            />
+          </div>
+          <div className="px-3 pb-3 flex justify-end">
+            <button
+              onClick={sendAttachment}
+              disabled={!phone || sending}
+              className="px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all"
+              style={{ background: "#25d366", color: "white", opacity: sending ? 0.7 : 1 }}>
+              {sending ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                  <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                </svg>
+              )}
+              Enviar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="flex gap-2 items-end">
         <button
@@ -473,6 +663,18 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
           style={{ background: showTemplates ? "var(--accent)" : "var(--surface-2)", border: "1px solid var(--border)" }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={showTemplates ? "white" : "var(--text-secondary)"} strokeWidth="2">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+        </button>
+
+        {/* Attach button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          title="Adjuntar archivo"
+          disabled={!!attachedFile || recording || sending}
+          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all"
+          style={{ background: "var(--surface-2)", border: "1px solid var(--border)", opacity: (attachedFile || recording || sending) ? 0.5 : 1 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
           </svg>
         </button>
 

@@ -110,6 +110,55 @@ async function findProspectByPhone(phoneNumber: string) {
   return null
 }
 
+// Descargar media de WhatsApp y guardar en Supabase Storage
+async function downloadAndStoreMedia(mediaId: string, type: string, fromNumber: string): Promise<string> {
+  try {
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+    if (!accessToken) return ""
+
+    // 1. Obtener URL de descarga del media
+    const metaRes = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const metaData = await metaRes.json()
+    if (!metaData.url) return ""
+
+    // 2. Descargar el archivo
+    const fileRes = await fetch(metaData.url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!fileRes.ok) return ""
+    const fileBuffer = Buffer.from(await fileRes.arrayBuffer())
+
+    // 3. Determinar extensión
+    const mimeType = metaData.mime_type || fileRes.headers.get("content-type") || "application/octet-stream"
+    const extMap: Record<string, string> = {
+      "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac",
+      "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+      "video/mp4": "mp4", "video/3gpp": "3gp",
+      "application/pdf": "pdf",
+    }
+    const ext = extMap[mimeType.split(";")[0]] || "bin"
+
+    // 4. Subir a Supabase Storage
+    const fileName = `inbound/${fromNumber}/${Date.now()}.${ext}`
+    const { data: storageData } = await supabase.storage
+      .from("whatsapp-media")
+      .upload(fileName, fileBuffer, { contentType: mimeType, upsert: false })
+
+    if (storageData?.path) {
+      const { data: urlData } = supabase.storage
+        .from("whatsapp-media")
+        .getPublicUrl(storageData.path)
+      return urlData.publicUrl
+    }
+    return ""
+  } catch (err) {
+    console.error("Media download error:", err)
+    return ""
+  }
+}
+
 // POST: recibir mensajes entrantes + status updates
 export async function POST(req: NextRequest) {
   try {
@@ -138,16 +187,27 @@ export async function POST(req: NextRequest) {
 
         // Soportar texto, imagen, audio, video, documento, etc.
         let content = ""
+        let mediaUrl = ""
+        let mediaType = ""
+
         if (msg.type === "text") {
           content = msg.text?.body || ""
         } else if (msg.type === "image") {
           content = `[Imagen${msg.image?.caption ? `: ${msg.image.caption}` : ""}]`
+          mediaType = "image"
+          if (msg.image?.id) mediaUrl = await downloadAndStoreMedia(msg.image.id, "image", fromNumber)
         } else if (msg.type === "audio") {
           content = "[Audio]"
+          mediaType = "audio"
+          if (msg.audio?.id) mediaUrl = await downloadAndStoreMedia(msg.audio.id, "audio", fromNumber)
         } else if (msg.type === "video") {
           content = `[Video${msg.video?.caption ? `: ${msg.video.caption}` : ""}]`
+          mediaType = "video"
+          if (msg.video?.id) mediaUrl = await downloadAndStoreMedia(msg.video.id, "video", fromNumber)
         } else if (msg.type === "document") {
           content = `[Documento: ${msg.document?.filename || "archivo"}]`
+          mediaType = "document"
+          if (msg.document?.id) mediaUrl = await downloadAndStoreMedia(msg.document.id, "document", fromNumber)
         } else if (msg.type === "sticker") {
           content = "[Sticker]"
         } else if (msg.type === "location") {
@@ -161,7 +221,7 @@ export async function POST(req: NextRequest) {
         // Buscar el prospecto con múltiples formatos de número
         const prospect = await findProspectByPhone(fromNumber)
 
-        const { error: insertErr } = await supabase.from("whatsapp_messages").insert({
+        const insertData: Record<string, unknown> = {
           prospect_id: prospect?.id || null,
           organization_id: prospect?.organization_id || null,
           whatsapp_message_id: waMessageId,
@@ -170,7 +230,11 @@ export async function POST(req: NextRequest) {
           to_number: process.env.WHATSAPP_PHONE_NUMBER_ID,
           content,
           status: "received",
-        })
+        }
+        if (mediaUrl) insertData.media_url = mediaUrl
+        if (mediaType) insertData.media_type = mediaType
+
+        const { error: insertErr } = await supabase.from("whatsapp_messages").insert(insertData)
 
         if (insertErr) {
           console.error("WhatsApp insert error:", insertErr.message, "prospect:", prospect?.id, "from:", fromNumber)

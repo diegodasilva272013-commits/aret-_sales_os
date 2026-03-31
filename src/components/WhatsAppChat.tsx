@@ -9,6 +9,8 @@ type WaMessage = {
   content: string
   status: string
   created_at: string
+  media_url?: string
+  media_type?: string
 }
 
 type GeneratedMessage = {
@@ -42,12 +44,17 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
   const [error, setError] = useState("")
   const [loadError, setLoadError] = useState("")
   const [loading, setLoading] = useState(true)
+  const [recording, setRecording] = useState(false)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Función para cargar mensajes desde DB (reemplaza todo para capturar status updates)
   const loadMessages = useCallback(async () => {
     const { data, error: queryError } = await supabase.from("whatsapp_messages")
-      .select("id, direction, content, status, created_at")
+      .select("id, direction, content, status, created_at, media_url, media_type")
       .eq("prospect_id", prospectId)
       .order("created_at")
     setLoading(false)
@@ -159,6 +166,83 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
     setSending(false)
   }
 
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" })
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+        setRecordingTime(0)
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/ogg" })
+        if (audioBlob.size < 1000) return // ignorar grabaciones muy cortas
+
+        setSending(true)
+        setError("")
+
+        const formData = new FormData()
+        formData.append("audio", audioBlob, "audio.ogg")
+        formData.append("prospectId", prospectId)
+        formData.append("toNumber", phone)
+
+        const res = await fetch("/api/whatsapp/send-audio", { method: "POST", body: formData })
+        const data = await res.json()
+
+        if (!res.ok) {
+          setError(data.error || "Error enviando audio")
+        } else if (data.message) {
+          setMessages(prev => {
+            if (prev.some(m => m.id === data.message.id)) return prev
+            return [...prev, data.message as WaMessage]
+          })
+        }
+        setSending(false)
+      }
+
+      mediaRecorder.start(250)
+      setRecording(true)
+      setRecordingTime(0)
+      recordingTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000)
+    } catch {
+      setError("No se pudo acceder al micrófono")
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop()
+    }
+    setRecording(false)
+  }
+
+  function cancelRecording() {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.ondataavailable = null
+      mediaRecorderRef.current.onstop = () => {
+        mediaRecorderRef.current?.stream?.getTracks().forEach(t => t.stop())
+      }
+      mediaRecorderRef.current.stop()
+    }
+    audioChunksRef.current = []
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+    setRecording(false)
+    setRecordingTime(0)
+  }
+
+  function formatRecordingTime(seconds: number) {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}:${s.toString().padStart(2, "0")}`
+  }
+
   function formatTime(iso: string) {
     return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
   }
@@ -242,6 +326,19 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
                         border: msg.direction === "inbound" ? "1px solid var(--border)" : "none",
                       }}>
                       <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                      {msg.media_type === "audio" && msg.media_url && (
+                        <audio controls preload="none" className="mt-1.5 w-full max-w-[240px]" style={{ height: "36px" }}>
+                          <source src={msg.media_url} />
+                        </audio>
+                      )}
+                      {msg.media_type === "image" && msg.media_url && (
+                        <img src={msg.media_url} alt="Imagen" className="mt-1.5 rounded-lg max-w-[240px] max-h-[200px] object-cover" />
+                      )}
+                      {msg.media_type === "video" && msg.media_url && (
+                        <video controls preload="none" className="mt-1.5 rounded-lg max-w-[240px]">
+                          <source src={msg.media_url} />
+                        </video>
+                      )}
                     </div>
                     <div className={`flex items-center gap-1 mt-0.5 ${msg.direction === "outbound" ? "justify-end" : "justify-start"}`}>
                       <span className="text-xs" style={{ color: "var(--text-muted)" }}>{formatTime(msg.created_at)}</span>
@@ -301,38 +398,74 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
           </svg>
         </button>
-        <div className="flex-1 relative">
-          <textarea
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-            placeholder="Escribí un mensaje..."
-            rows={1}
-            className="w-full px-4 py-3 rounded-2xl text-sm outline-none resize-none"
-            style={{
-              background: "var(--surface-2)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-              maxHeight: "120px",
-            }}
-          />
-        </div>
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || !phone || sending}
-          className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all"
-          style={{
-            background: input.trim() && phone ? "#25d366" : "var(--surface-2)",
-            opacity: sending ? 0.7 : 1,
-          }}>
-          {sending ? (
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          )}
-        </button>
+
+        {recording ? (
+          /* Recording UI */
+          <div className="flex-1 flex items-center gap-3 px-4 py-3 rounded-2xl" style={{ background: "var(--surface-2)", border: "1px solid rgba(239,68,68,0.4)" }}>
+            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-sm font-mono" style={{ color: "var(--text-primary)" }}>{formatRecordingTime(recordingTime)}</span>
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>Grabando...</span>
+            <div className="flex-1" />
+            <button onClick={cancelRecording} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(239,68,68,0.1)" }} title="Cancelar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        ) : (
+          /* Text input */
+          <div className="flex-1 relative">
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend() } }}
+              placeholder="Escribí un mensaje..."
+              rows={1}
+              className="w-full px-4 py-3 rounded-2xl text-sm outline-none resize-none"
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+                maxHeight: "120px",
+              }}
+            />
+          </div>
+        )}
+
+        {/* Send or Record/Stop button */}
+        {input.trim() ? (
+          <button
+            onClick={handleSend}
+            disabled={!phone || sending}
+            className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all"
+            style={{ background: "#25d366", opacity: sending ? 0.7 : 1 }}>
+            {sending ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={recording ? stopRecording : startRecording}
+            disabled={!phone || sending}
+            className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 transition-all"
+            style={{ background: recording ? "#ef4444" : "var(--surface-2)", border: recording ? "none" : "1px solid var(--border)" }}>
+            {sending ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : recording ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none">
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            )}
+          </button>
+        )}
       </div>
     </div>
   )

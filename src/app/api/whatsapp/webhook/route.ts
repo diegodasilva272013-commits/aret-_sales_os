@@ -19,7 +19,33 @@ export async function GET(req: NextRequest) {
   return new NextResponse("Forbidden", { status: 403 })
 }
 
-// POST: recibir mensajes entrantes
+// Buscar prospecto por número, probando varios formatos
+async function findProspectByPhone(phoneNumber: string) {
+  // phoneNumber viene sin + (ej: 5491112345678)
+  const variations = [
+    `+${phoneNumber}`,
+    phoneNumber,
+  ]
+  
+  // También probar con formato argentino alternativo (549→54)
+  if (phoneNumber.startsWith("549")) {
+    variations.push(`+54${phoneNumber.slice(3)}`)
+    variations.push(`54${phoneNumber.slice(3)}`)
+  }
+
+  const orFilter = variations.map(v => `whatsapp_number.eq.${v}`).join(",")
+  
+  const { data } = await supabase
+    .from("prospects")
+    .select("id, organization_id")
+    .or(orFilter)
+    .limit(1)
+    .maybeSingle()
+
+  return data
+}
+
+// POST: recibir mensajes entrantes + status updates
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -27,46 +53,88 @@ export async function POST(req: NextRequest) {
     const changes = entry?.changes?.[0]
     const value = changes?.value
 
-    if (!value?.messages?.length) return NextResponse.json({ ok: true })
+    if (!value) return NextResponse.json({ ok: true })
 
-    for (const msg of value.messages) {
-      if (msg.type !== "text") continue
+    // === 1. Procesar MENSAJES ENTRANTES ===
+    if (value.messages?.length) {
+      for (const msg of value.messages) {
+        const fromNumber = msg.from
+        const waMessageId = msg.id
 
-      const fromNumber = msg.from // número del prospecto (sin +)
-      const content = msg.text?.body || ""
-      const waMessageId = msg.id
+        // Soportar texto, imagen, audio, video, documento, etc.
+        let content = ""
+        if (msg.type === "text") {
+          content = msg.text?.body || ""
+        } else if (msg.type === "image") {
+          content = `[Imagen${msg.image?.caption ? `: ${msg.image.caption}` : ""}]`
+        } else if (msg.type === "audio") {
+          content = "[Audio]"
+        } else if (msg.type === "video") {
+          content = `[Video${msg.video?.caption ? `: ${msg.video.caption}` : ""}]`
+        } else if (msg.type === "document") {
+          content = `[Documento: ${msg.document?.filename || "archivo"}]`
+        } else if (msg.type === "sticker") {
+          content = "[Sticker]"
+        } else if (msg.type === "location") {
+          content = `[Ubicación: ${msg.location?.latitude}, ${msg.location?.longitude}]`
+        } else if (msg.type === "reaction") {
+          content = `[Reacción: ${msg.reaction?.emoji || ""}]`
+        } else {
+          content = `[${msg.type || "mensaje"}]`
+        }
 
-      // Buscar el prospecto por número de WhatsApp
-      const { data: prospect } = await supabase
-        .from("prospects")
-        .select("id, organization_id")
-        .or(`whatsapp_number.eq.+${fromNumber},whatsapp_number.eq.${fromNumber}`)
-        .single()
+        // Buscar el prospecto con múltiples formatos de número
+        const prospect = await findProspectByPhone(fromNumber)
 
-      await supabase.from("whatsapp_messages").insert({
-        prospect_id: prospect?.id || null,
-        organization_id: prospect?.organization_id || null,
-        whatsapp_message_id: waMessageId,
-        direction: "inbound",
-        from_number: `+${fromNumber}`,
-        to_number: process.env.WHATSAPP_PHONE_NUMBER_ID,
-        content,
-        status: "received",
-      })
+        const { error: insertErr } = await supabase.from("whatsapp_messages").insert({
+          prospect_id: prospect?.id || null,
+          organization_id: prospect?.organization_id || null,
+          whatsapp_message_id: waMessageId,
+          direction: "inbound",
+          from_number: `+${fromNumber}`,
+          to_number: process.env.WHATSAPP_PHONE_NUMBER_ID,
+          content,
+          status: "received",
+        })
 
-      // Marcar como leído en WhatsApp
-      await fetch(`https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          status: "read",
-          message_id: waMessageId,
-        }),
-      })
+        if (insertErr) {
+          console.error("WhatsApp insert error:", insertErr.message, "prospect:", prospect?.id, "from:", fromNumber)
+        }
+
+        // Marcar como leído en WhatsApp
+        fetch(`https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            status: "read",
+            message_id: waMessageId,
+          }),
+        }).catch(() => {}) // fire and forget
+      }
+    }
+
+    // === 2. Procesar STATUS UPDATES (sent → delivered → read) ===
+    if (value.statuses?.length) {
+      for (const status of value.statuses) {
+        const waMessageId = status.id
+        const newStatus = status.status // "sent" | "delivered" | "read" | "failed"
+
+        if (!waMessageId || !newStatus) continue
+
+        // Actualizar status del mensaje en nuestra DB
+        const { error: updateErr } = await supabase
+          .from("whatsapp_messages")
+          .update({ status: newStatus })
+          .eq("whatsapp_message_id", waMessageId)
+
+        if (updateErr) {
+          console.error("WhatsApp status update error:", updateErr.message, "msgId:", waMessageId, "status:", newStatus)
+        }
+      }
     }
 
     return NextResponse.json({ ok: true })

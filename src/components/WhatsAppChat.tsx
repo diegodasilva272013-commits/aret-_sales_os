@@ -42,19 +42,20 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
   const [error, setError] = useState("")
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Función para cargar mensajes desde DB (deduplicando por id)
+  // Función para cargar mensajes desde DB (reemplaza todo para capturar status updates)
   const loadMessages = useCallback(async () => {
     const { data } = await supabase.from("whatsapp_messages")
       .select("id, direction, content, status, created_at")
       .eq("prospect_id", prospectId)
       .order("created_at")
-    if (data && data.length > 0) {
+    if (data) {
       setMessages(prev => {
-        // Merge: mantener mensajes existentes y agregar nuevos
-        const ids = new Set(prev.map(m => m.id))
-        const newMsgs = (data as WaMessage[]).filter(m => !ids.has(m.id))
-        if (newMsgs.length === 0) return prev
-        return [...prev, ...newMsgs].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        // Reemplazar con datos frescos de DB, pero mantener optimistic temporales
+        const dbIds = new Set((data as WaMessage[]).map(m => m.id))
+        const tempMsgs = prev.filter(m => m.id.startsWith("temp-") && !dbIds.has(m.id))
+        const merged = [...(data as WaMessage[]), ...tempMsgs]
+          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        return merged
       })
     }
   }, [prospectId])
@@ -71,7 +72,7 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
     // Cargar mensajes históricos
     loadMessages()
 
-    // Suscribirse a mensajes nuevos en tiempo real
+    // Suscribirse a mensajes nuevos y updates en tiempo real
     const channel = supabase
       .channel(`wa-${prospectId}`)
       .on("postgres_changes", {
@@ -86,6 +87,15 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
           if (prev.some(m => m.id === newMsg.id)) return prev
           return [...prev, newMsg]
         })
+      })
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "whatsapp_messages",
+        filter: `prospect_id=eq.${prospectId}`,
+      }, payload => {
+        const updated = payload.new as WaMessage
+        setMessages(prev => prev.map(m => m.id === updated.id ? { ...m, status: updated.status } : m))
       })
       .subscribe()
 

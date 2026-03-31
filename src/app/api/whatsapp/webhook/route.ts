@@ -32,6 +32,10 @@ async function findProspectByPhone(phoneNumber: string) {
     variations.push(`+54${phoneNumber.slice(3)}`)
     variations.push(`54${phoneNumber.slice(3)}`)
   }
+  // Formato uruguayo (598→5989)
+  if (phoneNumber.startsWith("598")) {
+    variations.push(`+598${phoneNumber.slice(3)}`)
+  }
 
   const orFilter = variations.map(v => `whatsapp_number.eq.${v}`).join(",")
   
@@ -42,13 +46,33 @@ async function findProspectByPhone(phoneNumber: string) {
     .limit(1)
     .maybeSingle()
 
-  return data
+  if (data) return data
+
+  // Fallback: buscar en mensajes previos enviados a este número
+  const toVariations = variations.map(v => `to_number.eq.${v}`).join(",")
+  const { data: prevMsg } = await supabase
+    .from("whatsapp_messages")
+    .select("prospect_id, organization_id")
+    .eq("direction", "outbound")
+    .or(toVariations)
+    .not("prospect_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (prevMsg) return { id: prevMsg.prospect_id, organization_id: prevMsg.organization_id }
+
+  return null
 }
 
 // POST: recibir mensajes entrantes + status updates
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    // Log completo para debugging
+    console.log("WhatsApp webhook received:", JSON.stringify(body).slice(0, 500))
+
     const entry = body.entry?.[0]
     const changes = entry?.changes?.[0]
     const value = changes?.value

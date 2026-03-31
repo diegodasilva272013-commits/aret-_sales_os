@@ -7,11 +7,46 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-// GET: verificación del webhook desde Meta
+// GET: verificación del webhook desde Meta + diagnóstico
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("hub.mode")
   const token = req.nextUrl.searchParams.get("hub.verify_token")
   const challenge = req.nextUrl.searchParams.get("hub.challenge")
+
+  // Diagnóstico: GET /api/whatsapp/webhook?diag=1
+  if (req.nextUrl.searchParams.get("diag") === "1") {
+    const prospectId = req.nextUrl.searchParams.get("pid") || "9f7e6374-2af3-4c6e-85b9-528e083728ee"
+    const orgId = "41bb4817-72d1-4bf4-89d3-029b094bce39"
+
+    const { data: msgs, error: msgErr } = await supabase
+      .from("whatsapp_messages")
+      .select("id, direction, content, status, created_at")
+      .eq("prospect_id", prospectId)
+      .order("created_at", { ascending: false })
+      .limit(5)
+
+    const { data: inbox, error: inboxErr } = await supabase
+      .from("whatsapp_messages")
+      .select("id, content, direction, prospect_id, created_at, prospects!prospect_id(id, full_name)")
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(5)
+
+    const { count } = await supabase
+      .from("whatsapp_messages")
+      .select("id", { count: "exact", head: true })
+
+    return NextResponse.json({
+      prospect_messages: { count: msgs?.length, error: msgErr?.message, data: msgs },
+      inbox_messages: { count: inbox?.length, error: inboxErr?.message, data: inbox },
+      total_in_db: count,
+      env: {
+        phone_id: process.env.WHATSAPP_PHONE_NUMBER_ID,
+        has_token: !!process.env.WHATSAPP_ACCESS_TOKEN,
+        has_svc_key: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+      },
+    })
+  }
 
   if (mode === "subscribe" && token === process.env.WHATSAPP_VERIFY_TOKEN) {
     return new NextResponse(challenge, { status: 200 })

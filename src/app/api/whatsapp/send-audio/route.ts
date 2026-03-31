@@ -1,11 +1,42 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
+import { writeFile, readFile, unlink } from "fs/promises"
+import { join } from "path"
+import { tmpdir } from "os"
+import { execFile } from "child_process"
+import { promisify } from "util"
+
+const execFileAsync = promisify(execFile)
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
+
+async function convertWebmToOgg(webmBuffer: Buffer): Promise<Buffer> {
+  const ffmpegPath = require("ffmpeg-static") as string
+  const inputPath = join(tmpdir(), `audio-${Date.now()}.webm`)
+  const outputPath = join(tmpdir(), `audio-${Date.now()}.ogg`)
+
+  try {
+    await writeFile(inputPath, webmBuffer)
+    await execFileAsync(ffmpegPath, [
+      "-i", inputPath,
+      "-c:a", "libopus",
+      "-b:a", "48k",
+      "-vn",
+      "-y",
+      outputPath,
+    ])
+    const oggBuffer = await readFile(outputPath)
+    console.log("[send-audio] Converted WebM->OGG:", webmBuffer.length, "->", oggBuffer.length, "bytes")
+    return oggBuffer
+  } finally {
+    await unlink(inputPath).catch(() => {})
+    await unlink(outputPath).catch(() => {})
+  }
+}
 
 export async function POST(req: NextRequest) {
   const formData = await req.formData()
@@ -33,14 +64,17 @@ export async function POST(req: NextRequest) {
   const cleanNumber = toNumber.replace(/[\s\-\(\)]/g, "").replace(/^\+/, "")
 
   try {
-    const audioBuffer = Buffer.from(await audio.arrayBuffer())
-    console.log("[send-audio] Audio size:", audioBuffer.length, "bytes, to:", cleanNumber)
+    const webmBuffer = Buffer.from(await audio.arrayBuffer())
+    console.log("[send-audio] WebM size:", webmBuffer.length, "bytes, to:", cleanNumber)
 
-    // 1. Guardar en Supabase Storage para playback en la app
+    // 1. Convertir WebM a OGG/Opus (formato que WhatsApp acepta)
+    const oggBuffer = await convertWebmToOgg(webmBuffer)
+
+    // 2. Guardar OGG en Supabase Storage para playback en la app
     const fileName = `outbound/${prospectId}/${Date.now()}.ogg`
     const { data: storageData, error: storageError } = await supabaseAdmin.storage
       .from("whatsapp-media")
-      .upload(fileName, audioBuffer, { contentType: "audio/ogg; codecs=opus", upsert: false })
+      .upload(fileName, oggBuffer, { contentType: "audio/ogg", upsert: false })
 
     let mediaUrl = ""
     if (storageData?.path) {
@@ -51,10 +85,11 @@ export async function POST(req: NextRequest) {
     }
     console.log("[send-audio] Storage:", storageError ? storageError.message : mediaUrl)
 
-    // 2. Subir audio a WhatsApp Media API (soporta audio/ogg con opus)
+    // 3. Subir OGG real a WhatsApp Media API
     const waForm = new FormData()
-    waForm.append("file", new Blob([audioBuffer], { type: "audio/ogg; codecs=opus" }), "audio.ogg")
-    waForm.append("type", "audio/ogg; codecs=opus")
+    const oggBlob = new Blob([oggBuffer as unknown as ArrayBuffer], { type: "audio/ogg" })
+    waForm.append("file", oggBlob, "audio.ogg")
+    waForm.append("type", "audio/ogg")
     waForm.append("messaging_product", "whatsapp")
 
     const uploadRes = await fetch(

@@ -30,17 +30,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "WhatsApp no configurado" }, { status: 500 })
   }
 
-  let cleanNumber = toNumber.replace(/[\s\-\(\)]/g, "").replace(/^\+/, "")
+  const cleanNumber = toNumber.replace(/[\s\-\(\)]/g, "").replace(/^\+/, "")
 
   try {
     const audioBuffer = Buffer.from(await audio.arrayBuffer())
     console.log("[send-audio] Audio size:", audioBuffer.length, "bytes, to:", cleanNumber)
 
-    // 1. Subir audio a Supabase Storage primero (siempre funciona)
-    const fileName = `outbound/${prospectId}/${Date.now()}.webm`
+    // 1. Guardar en Supabase Storage para playback en la app
+    const fileName = `outbound/${prospectId}/${Date.now()}.ogg`
     const { data: storageData, error: storageError } = await supabaseAdmin.storage
       .from("whatsapp-media")
-      .upload(fileName, audioBuffer, { contentType: "audio/webm", upsert: false })
+      .upload(fileName, audioBuffer, { contentType: "audio/ogg; codecs=opus", upsert: false })
 
     let mediaUrl = ""
     if (storageData?.path) {
@@ -51,7 +51,44 @@ export async function POST(req: NextRequest) {
     }
     console.log("[send-audio] Storage:", storageError ? storageError.message : mediaUrl)
 
-    // 2. Enviar a WhatsApp usando URL pública (no hace falta subir media a Graph API)
+    // 2. Subir audio a WhatsApp Media API (soporta audio/ogg con opus)
+    const waForm = new FormData()
+    waForm.append("file", new Blob([audioBuffer], { type: "audio/ogg; codecs=opus" }), "audio.ogg")
+    waForm.append("type", "audio/ogg; codecs=opus")
+    waForm.append("messaging_product", "whatsapp")
+
+    const uploadRes = await fetch(
+      `https://graph.facebook.com/v21.0/${phoneNumberId}/media`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: waForm,
+      }
+    )
+    const uploadData = await uploadRes.json()
+    console.log("[send-audio] Media upload:", uploadRes.status, JSON.stringify(uploadData))
+
+    if (!uploadRes.ok || !uploadData.id) {
+      console.error("[send-audio] Media upload failed:", JSON.stringify(uploadData))
+      // Guardar con status failed
+      await supabase.from("whatsapp_messages").insert({
+        prospect_id: prospectId,
+        organization_id: profile?.organization_id,
+        direction: "outbound",
+        from_number: phoneNumberId,
+        to_number: `+${cleanNumber}`,
+        content: "[Audio]",
+        media_url: mediaUrl,
+        media_type: "audio",
+        status: "failed",
+      })
+      return NextResponse.json({
+        error: uploadData.error?.message || "Error subiendo audio a WhatsApp",
+        details: uploadData,
+      }, { status: 400 })
+    }
+
+    // 3. Enviar mensaje con el media_id
     const msgRes = await fetch(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
       {
@@ -64,16 +101,15 @@ export async function POST(req: NextRequest) {
           messaging_product: "whatsapp",
           to: cleanNumber,
           type: "audio",
-          audio: { link: mediaUrl },
+          audio: { id: uploadData.id },
         }),
       }
     )
     const msgData = await msgRes.json()
-    console.log("[send-audio] WhatsApp response:", msgRes.status, JSON.stringify(msgData))
+    console.log("[send-audio] WhatsApp send:", msgRes.status, JSON.stringify(msgData))
 
     if (!msgRes.ok) {
-      console.error("[send-audio] WhatsApp error:", JSON.stringify(msgData))
-      // Guardar en DB de todas formas con status failed
+      console.error("[send-audio] WhatsApp send error:", JSON.stringify(msgData))
       await supabase.from("whatsapp_messages").insert({
         prospect_id: prospectId,
         organization_id: profile?.organization_id,
@@ -85,13 +121,13 @@ export async function POST(req: NextRequest) {
         media_type: "audio",
         status: "failed",
       })
-      return NextResponse.json({ 
-        error: msgData.error?.message || "Error enviando audio a WhatsApp", 
-        details: msgData 
+      return NextResponse.json({
+        error: msgData.error?.message || "Error enviando audio a WhatsApp",
+        details: msgData,
       }, { status: 400 })
     }
 
-    // 3. Guardar en DB con éxito
+    // 4. Guardar en DB con éxito
     const { data: savedMsg } = await supabase.from("whatsapp_messages").insert({
       prospect_id: prospectId,
       organization_id: profile?.organization_id,

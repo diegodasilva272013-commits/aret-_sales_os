@@ -13,6 +13,16 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("hub.verify_token")
   const challenge = req.nextUrl.searchParams.get("hub.challenge")
 
+  // Ver logs: GET /api/whatsapp/webhook?logs=1
+  if (req.nextUrl.searchParams.get("logs") === "1") {
+    const { data: logs } = await supabase
+      .from("webhook_logs")
+      .select("id, method, body, created_at")
+      .order("created_at", { ascending: false })
+      .limit(20)
+    return NextResponse.json({ logs })
+  }
+
   // Diagnóstico: GET /api/whatsapp/webhook?diag=1
   if (req.nextUrl.searchParams.get("diag") === "1") {
     const prospectId = req.nextUrl.searchParams.get("pid") || "9f7e6374-2af3-4c6e-85b9-528e083728ee"
@@ -105,8 +115,14 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
-    // Log completo para debugging
-    console.log("WhatsApp webhook received:", JSON.stringify(body).slice(0, 500))
+    // Guardar CADA request en webhook_logs para debugging
+    await supabase.from("webhook_logs").insert({
+      method: "POST",
+      body,
+      headers: Object.fromEntries(req.headers.entries()),
+    }).then(({ error }) => {
+      if (error) console.error("webhook_logs insert error:", error.message)
+    })
 
     const entry = body.entry?.[0]
     const changes = entry?.changes?.[0]

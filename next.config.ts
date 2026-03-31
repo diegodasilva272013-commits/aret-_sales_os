@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  generateBuildId: () => `build-${Date.now()}`,
 };
 
 export default nextConfig;

@@ -38,8 +38,8 @@ export async function POST(req: NextRequest) {
     const audioBuffer = Buffer.from(await audio.arrayBuffer())
     const uploadForm = new FormData()
     uploadForm.append("messaging_product", "whatsapp")
-    uploadForm.append("file", new Blob([audioBuffer], { type: "audio/ogg" }), "audio.ogg")
-    uploadForm.append("type", "audio/ogg")
+    uploadForm.append("file", new Blob([audioBuffer], { type: "audio/webm" }), "audio.webm")
+    uploadForm.append("type", "audio/webm")
 
     const uploadRes = await fetch(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/media`,
@@ -87,10 +87,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Guardar audio en Supabase Storage
-    const fileName = `outbound/${prospectId}/${Date.now()}.ogg`
+    const fileName = `outbound/${prospectId}/${Date.now()}.webm`
     const { data: storageData } = await supabaseAdmin.storage
       .from("whatsapp-media")
-      .upload(fileName, audioBuffer, { contentType: "audio/ogg", upsert: false })
+      .upload(fileName, audioBuffer, { contentType: "audio/webm", upsert: false })
 
     let mediaUrl = ""
     if (storageData?.path) {

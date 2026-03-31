@@ -182,14 +182,14 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
         if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
         setRecordingTime(0)
 
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/ogg" })
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm;codecs=opus" })
         if (audioBlob.size < 1000) return // ignorar grabaciones muy cortas
 
         setSending(true)
         setError("")
 
         const formData = new FormData()
-        formData.append("audio", audioBlob, "audio.ogg")
+        formData.append("audio", audioBlob, "audio.webm")
         formData.append("prospectId", prospectId)
         formData.append("toNumber", phone)
 

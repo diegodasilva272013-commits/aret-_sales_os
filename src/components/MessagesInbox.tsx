@@ -79,7 +79,7 @@ export default function MessagesInbox({ conversations, orgId }: { conversations:
 
     // Polling cada 8s como fallback para inbox
     const pollInbox = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("whatsapp_messages")
         .select(`
           id, content, direction, status, created_at, prospect_id,
@@ -88,6 +88,12 @@ export default function MessagesInbox({ conversations, orgId }: { conversations:
         .eq("organization_id", orgId)
         .order("created_at", { ascending: false })
         .limit(200)
+
+      if (error) {
+        console.error("[Inbox] Polling error:", error)
+        return
+      }
+      console.log(`[Inbox] Polled ${data?.length || 0} messages, orgId=${orgId}`)
 
       if (data && data.length > 0) {
         // Re-agrupar por prospect, quedarse con el último mensaje

@@ -29,7 +29,8 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login")
   const isWebhook = request.nextUrl.pathname.startsWith("/api/whatsapp/webhook")
-  const isPublicPage = isAuthPage || isWebhook
+  const isStripe = request.nextUrl.pathname.startsWith("/api/stripe")
+  const isPublicPage = isAuthPage || isWebhook || isStripe
 
   if (!user && !isPublicPage) {
     const url = request.nextUrl.clone()

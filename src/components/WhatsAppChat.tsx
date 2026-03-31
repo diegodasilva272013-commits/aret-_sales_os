@@ -44,10 +44,15 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
 
   // Función para cargar mensajes desde DB (reemplaza todo para capturar status updates)
   const loadMessages = useCallback(async () => {
-    const { data } = await supabase.from("whatsapp_messages")
+    const { data, error } = await supabase.from("whatsapp_messages")
       .select("id, direction, content, status, created_at")
       .eq("prospect_id", prospectId)
       .order("created_at")
+    if (error) {
+      console.error("[WhatsApp] Error loading messages:", error)
+      return
+    }
+    console.log(`[WhatsApp] Loaded ${data?.length || 0} messages for prospect ${prospectId}`)
     if (data) {
       setMessages(prev => {
         // Reemplazar con datos frescos de DB, pero mantener optimistic temporales

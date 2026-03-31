@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server"
 import MessagesInbox from "@/components/MessagesInbox"
 
+export const dynamic = "force-dynamic"
+
 export default async function MessagesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,7 +38,12 @@ export default async function MessagesPage() {
     }
   }
 
-  const { data: conversations } = await msgQuery
+  const { data: conversations, error: msgError } = await msgQuery
+
+  if (msgError) {
+    console.error("[Messages Page] Query error:", msgError)
+  }
+  console.log(`[Messages Page] Found ${conversations?.length || 0} messages, orgId=${profile?.organization_id}`)
 
   // Agrupar por prospect_id, quedarse con el último mensaje de cada uno
   const seen = new Set<string>()

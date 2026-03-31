@@ -178,10 +178,105 @@ function ImportModal({ onClose, onImported }: { onClose: () => void; onImported:
   )
 }
 
+function AddContactModal({ onClose, onCreated }: { onClose: () => void; onCreated: (c: WaContact) => void }) {
+  const [phone, setPhone] = useState("")
+  const [name, setName] = useState("")
+  const [alias, setAlias] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/whatsapp/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, name, alias }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Error al guardar")
+      onCreated(data.contact)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error desconocido")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.7)" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-md rounded-2xl p-6" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="font-semibold text-base" style={{ color: "var(--text-primary)" }}>Nuevo Contacto</h3>
+          <button onClick={onClose} style={{ color: "var(--text-muted)" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>
+              Teléfono <span style={{ color: "var(--danger)" }}>*</span>
+            </label>
+            <input
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="Ej: 5491112345678 o 1112345678"
+              autoFocus
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+            />
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Con código de país (54 para Argentina) o sin él.</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Nombre</label>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Ej: Juan Pérez"
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Alias</label>
+            <input
+              value={alias}
+              onChange={e => setAlias(e.target.value)}
+              placeholder="Ej: Juan (se usa en [name])"
+              className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+              style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+            />
+          </div>
+          {error && <p className="text-sm" style={{ color: "var(--danger)" }}>{error}</p>}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+              style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+              Cancelar
+            </button>
+            <button type="submit" disabled={!phone.trim() || loading} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+              style={{ background: "var(--accent)" }}>
+              {loading ? "Guardando..." : "Guardar contacto"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function ContactsClient({ contacts: initialContacts, orgId }: { contacts: WaContact[]; orgId: string }) {
   const [contacts, setContacts] = useState<WaContact[]>(initialContacts)
   const [search, setSearch] = useState("")
   const [showImport, setShowImport] = useState(false)
+  const [showAdd, setShowAdd] = useState(false)
   const [importMsg, setImportMsg] = useState<string | null>(null)
 
   const filtered = contacts.filter(c => {
@@ -194,11 +289,17 @@ export default function ContactsClient({ contacts: initialContacts, orgId }: { c
     )
   })
 
+  const handleCreated = (contact: WaContact) => {
+    setContacts(prev => [contact, ...prev])
+    setShowAdd(false)
+    setImportMsg(`Contacto ${contact.phone} agregado.`)
+    setTimeout(() => setImportMsg(null), 3000)
+  }
+
   const handleImported = (count: number) => {
     setShowImport(false)
     setImportMsg(`Se importaron ${count} contactos exitosamente.`)
     setTimeout(() => setImportMsg(null), 4000)
-    // Refresh contacts
     fetch("/api/whatsapp/contacts")
       .then(r => r.json())
       .then(data => { if (data.contacts) setContacts(data.contacts) })
@@ -212,18 +313,30 @@ export default function ContactsClient({ contacts: initialContacts, orgId }: { c
           <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Contactos</h2>
           <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{contacts.length} contacto{contacts.length !== 1 ? "s" : ""}</p>
         </div>
-        <button
-          onClick={() => setShowImport(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90"
-          style={{ background: "var(--accent)" }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          Importar CSV
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90"
+            style={{ background: "var(--accent)" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Nuevo contacto
+          </button>
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium hover:opacity-90"
+            style={{ background: "var(--surface-2)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Importar CSV
+          </button>
+        </div>
       </div>
 
       {importMsg && (
@@ -292,6 +405,13 @@ export default function ContactsClient({ contacts: initialContacts, orgId }: { c
           </table>
         )}
       </div>
+
+      {showAdd && (
+        <AddContactModal
+          onClose={() => setShowAdd(false)}
+          onCreated={handleCreated}
+        />
+      )}
 
       {showImport && (
         <ImportModal

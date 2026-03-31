@@ -118,6 +118,9 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [attachPreview, setAttachPreview] = useState<string | null>(null)
   const [caption, setCaption] = useState("")
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysis, setAnalysis] = useState<string | null>(null)
+  const [analysisInfo, setAnalysisInfo] = useState<{ messageCount: number; audioTranscribed: number } | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -395,6 +398,31 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
+  async function runAnalysis() {
+    if (analyzing || messages.length === 0) return
+    setAnalyzing(true)
+    setAnalysis(null)
+    setAnalysisInfo(null)
+    setError("")
+    try {
+      const res = await fetch("/api/whatsapp/analyze-conversation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prospectId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || "Error al analizar conversación")
+      } else {
+        setAnalysis(data.analysis)
+        setAnalysisInfo({ messageCount: data.messageCount, audioTranscribed: data.audioTranscribed })
+      }
+    } catch {
+      setError("Error al analizar conversación")
+    }
+    setAnalyzing(false)
+  }
+
   function formatTime(iso: string) {
     return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
   }
@@ -654,8 +682,32 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
         </div>
       )}
 
-      {/* Input */}
+      {/* AI Analysis panel */}
+      {analysis && (
+        <div className="mb-2 rounded-xl overflow-hidden" style={{ border: "1px solid rgba(108,99,255,0.3)", background: "var(--surface)" }}>
+          <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: "1px solid rgba(108,99,255,0.2)", background: "rgba(108,99,255,0.05)" }}>
+            <div className="flex items-center gap-2">
+              <span style={{ fontSize: "16px" }}>🧠</span>
+              <span className="text-xs font-semibold" style={{ color: "var(--accent-light)" }}>Análisis IA de la conversación</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {analysisInfo && (
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {analysisInfo.messageCount} msgs{analysisInfo.audioTranscribed > 0 ? ` · ${analysisInfo.audioTranscribed} audios transcritos` : ""}
+                </span>
+              )}
+              <button onClick={() => setAnalysis(null)} className="text-xs" style={{ color: "var(--text-muted)" }}>✕</button>
+            </div>
+          </div>
+          <div className="p-3 max-h-64 overflow-y-auto text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+            {analysis}
+          </div>
+        </div>
+      )}
+
+      {/* Input bar */}
       <div className="flex gap-2 items-end">
+        {/* Templates button */}
         <button
           onClick={() => setShowTemplates(!showTemplates)}
           title="Mensajes generados"
@@ -666,16 +718,28 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
           </svg>
         </button>
 
-        {/* Attach button */}
+        {/* Attach file button */}
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Adjuntar archivo"
           disabled={!!attachedFile || recording || sending}
           className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all"
-          style={{ background: "var(--surface-2)", border: "1px solid var(--border)", opacity: (attachedFile || recording || sending) ? 0.5 : 1 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-          </svg>
+          style={{ background: "var(--surface-2)", border: "1px solid var(--border)", opacity: (attachedFile || recording || sending) ? 0.5 : 1, cursor: "pointer", fontSize: "18px" }}>
+          📎
+        </button>
+
+        {/* AI Analysis button */}
+        <button
+          onClick={runAnalysis}
+          title="Análisis IA de la conversación"
+          disabled={analyzing || messages.length === 0}
+          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all"
+          style={{ background: analyzing ? "var(--accent)" : "var(--surface-2)", border: analyzing ? "1px solid var(--accent)" : "1px solid var(--border)", opacity: (analyzing || messages.length === 0) ? 0.6 : 1, cursor: "pointer", fontSize: "18px" }}>
+          {analyzing ? (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            "🧠"
+          )}
         </button>
 
         {recording ? (
@@ -750,4 +814,4 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
   )
 }
 
-// Build cache bust: 2026-03-31 01:33:26
+// Build cache bust: 2026-03-31-v2

@@ -40,16 +40,20 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
   const [sending, setSending] = useState(false)
   const [phone, setPhone] = useState(whatsappNumber || "")
   const [error, setError] = useState("")
+  const [loadError, setLoadError] = useState("")
+  const [loading, setLoading] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Función para cargar mensajes desde DB (reemplaza todo para capturar status updates)
   const loadMessages = useCallback(async () => {
-    const { data, error } = await supabase.from("whatsapp_messages")
+    const { data, error: queryError } = await supabase.from("whatsapp_messages")
       .select("id, direction, content, status, created_at")
       .eq("prospect_id", prospectId)
       .order("created_at")
-    if (error) {
-      console.error("[WhatsApp] Error loading messages:", error)
+    setLoading(false)
+    if (queryError) {
+      console.error("[WhatsApp] Error loading messages:", queryError)
+      setLoadError(`Error: ${queryError.message} (code: ${queryError.code})`)
       return
     }
     console.log(`[WhatsApp] Loaded ${data?.length || 0} messages for prospect ${prospectId}`)
@@ -193,7 +197,20 @@ export default function WhatsAppChat({ prospectId, prospectName, whatsappNumber 
 
       {/* Chat */}
       <div className="flex-1 overflow-y-auto space-y-1 pr-1 mb-3" style={{ maxHeight: "420px" }}>
-        {messages.length === 0 ? (
+        {/* Debug info - visible en dev */}
+        {loadError && (
+          <div className="mb-2 px-3 py-2 rounded-lg text-xs" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444" }}>
+            <p className="font-semibold">Error cargando mensajes:</p>
+            <p>{loadError}</p>
+            <p className="mt-1">ProspectId: {prospectId}</p>
+          </div>
+        )}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#25d366", borderTopColor: "transparent" }} />
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Cargando mensajes...</p>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <div className="w-14 h-14 rounded-full flex items-center justify-center text-2xl"
               style={{ background: "rgba(37,211,102,0.1)" }}>

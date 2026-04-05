@@ -87,14 +87,14 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
       <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
         <table style={{ width: "100%", tableLayout: "fixed" }}>
           <colgroup>
-            <col style={{ width: "24%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "13%" }} />
+            <col style={{ width: "22%" }} />
             <col style={{ width: "11%" }} />
-            <col style={{ width: "10%" }} />
+            <col style={{ width: "8%" }} />
             <col style={{ width: "12%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "8%" }} />
           </colgroup>
           <thead>
             <tr style={{ background: "var(--surface)" }}>
@@ -154,8 +154,8 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                       {phaseCfg.label}
                     </span>
                   </td>
-                  <td className="px-4 py-4">
-                    <span className="px-2 py-1 rounded-full text-xs" style={{ background: statusCfg.bg, color: statusCfg.color, whiteSpace: "nowrap" }}>
+                  <td className="px-3 py-4">
+                    <span className="inline-block px-2 py-1 rounded-full text-xs text-center" style={{ background: statusCfg.bg, color: statusCfg.color, whiteSpace: "nowrap", fontSize: "10px" }}>
                       {statusCfg.label}
                     </span>
                   </td>

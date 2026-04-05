@@ -135,7 +135,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Areté IA OS - Autopilot Panel */}
-        <AutopilotPanel />
+        <AutopilotPanel userName={profile?.full_name || ""} />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-6 gap-4 mb-6">

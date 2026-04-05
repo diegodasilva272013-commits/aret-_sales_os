@@ -1,0 +1,41 @@
+{
+  "brandName": "Areté Sales OS",
+  "tagline": "El sistema de ventas que transforma tu negocio",
+  "colors": {
+    "background": "#0a0a0f",
+    "surface": "#111118",
+    "surface2": "#1a1a24",
+    "surface3": "#222230",
+    "border": "#2a2a3a",
+    "textPrimary": "#f0f0ff",
+    "textSecondary": "#9090b0",
+    "textMuted": "#5a5a7a",
+    "accent": "#6c63ff",
+    "accentLight": "#8b84ff",
+    "accentDark": "#4d46cc",
+    "success": "#22c55e",
+    "warning": "#f59e0b",
+    "danger": "#ef4444",
+    "info": "#3b82f6"
+  },
+  "demoMetrics": {
+    "totalProspectos": 1247,
+    "prospectosEsteMes": 186,
+    "llamadasHoy": 12,
+    "cerradosGanados": 89,
+    "tasaConversion": 18.4,
+    "tasaRespuesta": 67,
+    "empresasEncontradas": 3420,
+    "mensajesEnviados": 8540,
+    "campanasActivas": 15,
+    "contactosMasivo": 12800,
+    "ahorrotiempoHoras": 120,
+    "incrementoVentas": 340,
+    "miembrosEquipo": 8,
+    "grabacionesLlamadas": 234,
+    "videollamadas": 156,
+    "pipelineContacto": 340,
+    "pipelineVenta": 180,
+    "pipelineCierre": 89
+  }
+}

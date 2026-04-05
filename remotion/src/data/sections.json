@@ -1,0 +1,93 @@
+[
+  {
+    "id": "intro",
+    "nombre": "Introducción",
+    "ruta": "/",
+    "descripcion": "Presentación del sistema Areté Sales OS",
+    "duracionSegundos": 15
+  },
+  {
+    "id": "dashboard",
+    "nombre": "Dashboard",
+    "ruta": "/dashboard",
+    "descripcion": "Panel principal con KPIs en tiempo real: prospectos, llamadas, cierres, tasa de conversión y ranking del equipo.",
+    "duracionSegundos": 50
+  },
+  {
+    "id": "prospectos",
+    "nombre": "Gestión de Prospectos",
+    "ruta": "/prospects",
+    "descripcion": "Base de datos completa de prospectos con filtros, estados, asignación a setters y seguimiento automático.",
+    "duracionSegundos": 45
+  },
+  {
+    "id": "mensajes",
+    "nombre": "Mensajes WhatsApp",
+    "ruta": "/messages",
+    "descripcion": "Inbox unificado de WhatsApp con conversaciones agrupadas por prospecto, adjuntos, audio y análisis con IA.",
+    "duracionSegundos": 45
+  },
+  {
+    "id": "masivo",
+    "nombre": "WhatsApp Masivo",
+    "ruta": "/whatsapp",
+    "descripcion": "Campañas masivas con anti-bloqueo inteligente: importación CSV, variaciones de mensaje y monitor en tiempo real.",
+    "duracionSegundos": 50
+  },
+  {
+    "id": "pipeline",
+    "nombre": "Pipeline Kanban",
+    "ruta": "/pipeline",
+    "descripcion": "Tablero Kanban drag-and-drop para mover prospectos entre etapas: Nuevo, Activo, Llamada, Cierre.",
+    "duracionSegundos": 40
+  },
+  {
+    "id": "buscador",
+    "nombre": "Buscador de Empresas",
+    "ruta": "/find",
+    "descripcion": "Buscador potenciado con Google Maps: encontrá negocios por rubro y ubicación, analizalos con IA y guardá en un clic.",
+    "duracionSegundos": 45
+  },
+  {
+    "id": "llamadas",
+    "nombre": "Llamadas y Grabaciones",
+    "ruta": "/phone",
+    "descripcion": "Softphone integrado con grabación automática, transcripción y análisis de cada llamada con IA.",
+    "duracionSegundos": 40
+  },
+  {
+    "id": "videollamadas",
+    "nombre": "Videollamadas",
+    "ruta": "/video",
+    "descripcion": "Videollamadas integradas con grabación, transcripción automática y análisis de sentimiento con IA.",
+    "duracionSegundos": 40
+  },
+  {
+    "id": "agendas",
+    "nombre": "Agenda de Llamadas",
+    "ruta": "/calls",
+    "descripcion": "Calendario visual con drag-and-drop para agendar, reprogramar y gestionar todas tus llamadas.",
+    "duracionSegundos": 35
+  },
+  {
+    "id": "equipo",
+    "nombre": "Centro de Control",
+    "ruta": "/team",
+    "descripcion": "Gestión de equipo completa: asignación de roles, métricas por setter, proyectos y log de actividad.",
+    "duracionSegundos": 40
+  },
+  {
+    "id": "comparacion",
+    "nombre": "Comparación",
+    "ruta": null,
+    "descripcion": "Sin el sistema vs Con Areté Sales OS",
+    "duracionSegundos": 45
+  },
+  {
+    "id": "cta",
+    "nombre": "Llamado a la Acción",
+    "ruta": null,
+    "descripcion": "Agendá tu demo gratuita",
+    "duracionSegundos": 20
+  }
+]

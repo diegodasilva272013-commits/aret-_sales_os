@@ -1,0 +1,100 @@
+ÔÜá `eslint` configuration in next.config.ts is no longer supported. See more info here: https://nextjs.org/docs/app/api-reference/cli/next#next-lint-options
+ÔÜá Invalid next.config.ts options detected: 
+ÔÜá     Unrecognized key(s) in object: 'eslint'
+ÔÜá See more info here: https://nextjs.org/docs/messages/invalid-next-config
+Ôû▓ Next.js 16.2.1 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+Ô£ô Compiled successfully in 108s
+  Skipping validation of types
+  Finished TypeScript config validation in 254ms ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/68) ...
+  Generating static pages using 7 workers (17/68) 
+  Generating static pages using 7 workers (34/68) 
+  Generating static pages using 7 workers (51/68) 
+Ô£ô Generating static pages using 7 workers (68/68) in 10.4s
+  Finalizing page optimization ...
+
+Route (app)
+Ôöî ãÆ /
+Ôö£ Ôùï /_not-found
+Ôö£ ãÆ /admin
+Ôö£ ãÆ /api/admin/create-user
+Ôö£ ãÆ /api/admin/remove-setter
+Ôö£ ãÆ /api/analyze
+Ôö£ ãÆ /api/analyze/regenerate
+Ôö£ ãÆ /api/auth/google
+Ôö£ ãÆ /api/auth/google/callback
+Ôö£ ãÆ /api/businesses/analyze
+Ôö£ ãÆ /api/businesses/save
+Ôö£ ãÆ /api/businesses/search
+Ôö£ ãÆ /api/calendar/book
+Ôö£ ãÆ /api/calendar/book-calendly
+Ôö£ ãÆ /api/calendar/reschedule
+Ôö£ ãÆ /api/calendar/slots
+Ôö£ ãÆ /api/calls/analyze
+Ôö£ ãÆ /api/calls/audio
+Ôö£ ãÆ /api/calls/outbound
+Ôö£ ãÆ /api/calls/recording
+Ôö£ ãÆ /api/calls/token
+Ôö£ ãÆ /api/calls/twiml
+Ôö£ ãÆ /api/closer-metrics
+Ôö£ ãÆ /api/closer-metrics/[id]
+Ôö£ ãÆ /api/closer-metrics/summary
+Ôö£ ãÆ /api/notes/transcribe
+Ôö£ ãÆ /api/notifications
+Ôö£ ãÆ /api/notifications/self
+Ôö£ ãÆ /api/prospects/manual
+Ôö£ ãÆ /api/setup-chat
+Ôö£ ãÆ /api/stripe/checkout
+Ôö£ ãÆ /api/stripe/webhook
+Ôö£ ãÆ /api/video/composition
+Ôö£ ãÆ /api/video/composition-ready
+Ôö£ ãÆ /api/video/join
+Ôö£ ãÆ /api/video/media
+Ôö£ ãÆ /api/video/recordings
+Ôö£ ãÆ /api/video/room
+Ôö£ ãÆ /api/video/upload
+Ôö£ ãÆ /api/whatsapp/analyze-conversation
+Ôö£ ãÆ /api/whatsapp/debug
+Ôö£ ãÆ /api/whatsapp/send
+Ôö£ ãÆ /api/whatsapp/send-audio
+Ôö£ ãÆ /api/whatsapp/send-media
+Ôö£ ãÆ /api/whatsapp/test
+Ôö£ ãÆ /api/whatsapp/webhook
+Ôö£ ãÆ /auth/confirm
+Ôö£ Ôùï /auth/reset
+Ôö£ ãÆ /businesses
+Ôö£ ãÆ /businesses/[id]
+Ôö£ ãÆ /calls
+Ôö£ ãÆ /closer/metrics
+Ôö£ ãÆ /dashboard
+Ôö£ ãÆ /export/businesses
+Ôö£ ãÆ /export/closer-metrics
+Ôö£ ãÆ /export/prospects
+Ôö£ ãÆ /find
+Ôö£ ãÆ /join/[orgId]
+Ôö£ Ôùï /legal
+Ôö£ Ôùï /login
+Ôö£ ãÆ /messages
+Ôö£ Ôùï /onboarding
+Ôö£ ãÆ /phone
+Ôö£ ãÆ /pipeline
+Ôö£ ãÆ /prospects
+Ôö£ ãÆ /prospects/[id]
+Ôö£ ãÆ /prospects/new
+Ôö£ ãÆ /settings
+Ôö£ ãÆ /setup
+Ôö£ ãÆ /team
+Ôö£ ãÆ /video
+Ôöö ãÆ /videollamada/[roomId]
+
+
+ãÆ Proxy (Middleware)
+
+Ôùï  (Static)   prerendered as static content
+ãÆ  (Dynamic)  server-rendered on demand
+
+

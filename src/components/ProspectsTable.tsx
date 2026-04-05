@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import Link from "next/link"
 import type { Prospect } from "@/types"
+import { parseAIScore, getScoreColor, getScoreEmoji } from "@/lib/parseAIScore"
 
 const STATUS_CONFIG = {
   nuevo: { label: "Nuevo", color: "#6c63ff", bg: "rgba(108,99,255,0.15)" },
@@ -19,13 +20,24 @@ const PHASE_CONFIG = {
   cierre: { label: "Cierre", color: "#22c55e" },
 }
 
-type ProspectWithProfile = Prospect & { profiles?: { full_name: string; email: string } }
+type ProspectWithProfile = Prospect & { profiles?: { full_name: string; email: string }; notes?: string }
 
 export default function ProspectsTable({ prospects, currentUserId }: { prospects: ProspectWithProfile[]; currentUserId: string }) {
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState("todos")
   const [filterPhase, setFilterPhase] = useState("todas")
   const [filterSetter, setFilterSetter] = useState("todos")
+  const [filterSource, setFilterSource] = useState("todos")
+
+  // Precompute AI scores for all prospects
+  const aiScoreMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof parseAIScore>>()
+    prospects.forEach(p => {
+      const score = parseAIScore(p.notes)
+      if (score) map.set(p.id, score)
+    })
+    return map
+  }, [prospects])
 
   const filtered = prospects.filter(p => {
     const matchSearch = !search ||
@@ -35,7 +47,9 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
     const matchPhase = filterPhase === "todas" || p.phase === filterPhase
     const matchSetter = filterSetter === "todos" ||
       (filterSetter === "mios" ? p.assigned_to === currentUserId : p.assigned_to !== currentUserId)
-    return matchSearch && matchStatus && matchPhase && matchSetter
+    const matchSource = filterSource === "todos" ||
+      (filterSource === "ai" ? aiScoreMap.has(p.id) : !aiScoreMap.has(p.id))
+    return matchSearch && matchStatus && matchPhase && matchSetter && matchSource
   })
 
   return (
@@ -59,6 +73,7 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
           { value: filterStatus, set: setFilterStatus, options: [["todos", "Todos los estados"], ...Object.entries(STATUS_CONFIG).map(([k, v]) => [k, v.label])] },
           { value: filterPhase, set: setFilterPhase, options: [["todas", "Todas las fases"], ...Object.entries(PHASE_CONFIG).map(([k, v]) => [k, v.label])] },
           { value: filterSetter, set: setFilterSetter, options: [["todos", "Todos los setters"], ["mios", "Mis prospectos"], ["otros", "Otros setters"]] },
+          { value: filterSource, set: setFilterSource, options: [["todos", "Todas las fuentes"], ["ai", "🤖 Leads AI"], ["manual", "Manuales"]] },
         ].map((f, i) => (
           <select key={i} value={f.value} onChange={e => f.set(e.target.value)}
             className="px-4 py-2.5 rounded-xl text-sm outline-none cursor-pointer"
@@ -92,6 +107,7 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
               const statusCfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.nuevo
               const phaseCfg = PHASE_CONFIG[p.phase] || PHASE_CONFIG.contacto
               const isOwn = p.assigned_to === currentUserId
+              const ai = aiScoreMap.get(p.id)
 
               return (
                 <tr key={p.id} className="transition-colors"
@@ -107,8 +123,21 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                         ) : (
                           <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ background: "rgba(0,119,181,0.12)", color: "#0077b5", border: "1px solid rgba(0,119,181,0.25)" }}>in</span>
                         )}
+                        {ai && (
+                          <span className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                            style={{ background: "rgba(139,92,246,0.12)", color: "#8b5cf6", border: "1px solid rgba(139,92,246,0.25)" }}>
+                            🤖 AI
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs mt-0.5 truncate max-w-xs" style={{ color: "var(--text-muted)" }}>{p.headline}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs truncate max-w-xs" style={{ color: "var(--text-muted)" }}>{p.headline}</p>
+                        {ai && (
+                          <span className="text-xs font-semibold shrink-0" style={{ color: getScoreColor(ai.score) }}>
+                            {getScoreEmoji(ai.score)} {ai.score}pts
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-4 text-sm" style={{ color: "var(--text-secondary)" }}>{p.company || "—"}</td>

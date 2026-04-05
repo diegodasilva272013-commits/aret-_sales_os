@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 import type { Prospect, ProspectAnalysis, GeneratedMessage, FollowUp, FollowUpPhase } from "@/types"
+import { parseAIScore, getScoreColor, getScoreBg, getScoreEmoji } from "@/lib/parseAIScore"
 import BookCallModal from "./BookCallModal"
 import WhatsAppChat from "./WhatsAppChat"
 import VideoRecordings from "./VideoRecordings"
@@ -354,6 +355,7 @@ export default function ProspectDetail({ prospect, analysis, messages, followUps
   }
 
   const statusCfg = STATUS_CONFIG[localStatus]
+  const aiScore = parseAIScore(prospect.notes)
 
   return (
     <>
@@ -466,6 +468,57 @@ export default function ProspectDetail({ prospect, analysis, messages, followUps
                 {kw}
               </span>
             ))}
+          </div>
+        )}
+
+        {/* AI Lead Score card — from arete-web agent */}
+        {aiScore && (
+          <div className="mb-6 rounded-2xl overflow-hidden animate-fade-in"
+            style={{ border: `1px solid ${getScoreColor(aiScore.score)}40` }}>
+            <div className="px-5 py-3 flex items-center justify-between"
+              style={{ background: getScoreBg(aiScore.score) }}>
+              <div className="flex items-center gap-3">
+                <span className="text-lg">{getScoreEmoji(aiScore.score)}</span>
+                <div>
+                  <p className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>
+                    Lead Score AI: <span style={{ color: getScoreColor(aiScore.score) }}>{aiScore.score}/{aiScore.maxScore}</span>
+                  </p>
+                  <p className="text-xs capitalize" style={{ color: getScoreColor(aiScore.score) }}>{aiScore.label}</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-semibold"
+                style={{ background: getScoreBg(aiScore.score), color: getScoreColor(aiScore.score), border: `1px solid ${getScoreColor(aiScore.score)}30` }}>
+                Agente AI
+              </span>
+            </div>
+            <div className="px-5 py-4" style={{ background: "var(--surface)" }}>
+              <div className="grid grid-cols-4 gap-4 mb-4">
+                {[
+                  { label: "Urgencia", value: aiScore.urgencia, max: 25 },
+                  { label: "Presupuesto", value: aiScore.presupuesto, max: 25 },
+                  { label: "Fit", value: aiScore.fit, max: 25 },
+                  { label: "Engagement", value: aiScore.engagement, max: 25 },
+                ].map(dim => (
+                  <div key={dim.label}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span style={{ color: "var(--text-secondary)" }}>{dim.label}</span>
+                      <span className="font-semibold" style={{ color: "var(--text-primary)" }}>{dim.value}/{dim.max}</span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full" style={{ background: "var(--surface-2)" }}>
+                      <div className="h-full rounded-full transition-all" style={{
+                        width: `${(dim.value / dim.max) * 100}%`,
+                        background: dim.value >= 20 ? "#22c55e" : dim.value >= 15 ? "#f59e0b" : "#6b7280",
+                      }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {aiScore.motivo && (
+                <p className="text-xs leading-relaxed" style={{ color: "var(--text-muted)" }}>
+                  💡 {aiScore.motivo}
+                </p>
+              )}
+            </div>
           </div>
         )}
 

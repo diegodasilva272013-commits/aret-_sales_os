@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import Link from "next/link"
+import { parseAIScore, getScoreColor, getScoreEmoji } from "@/lib/parseAIScore"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -14,7 +15,7 @@ export default async function DashboardPage() {
   const isOwner = profileCheck?.is_owner || false
 
   // Queries base - non-owners solo ven lo suyo
-  let allProspectsQuery = supabase.from("prospects").select("id, status, phase, follow_up_count, assigned_to, created_at, source_type")
+  let allProspectsQuery = supabase.from("prospects").select("id, status, phase, follow_up_count, assigned_to, created_at, source_type, notes")
   let recentProspectsQuery = supabase.from("prospects").select("*, profiles!assigned_to(full_name)").order("created_at", { ascending: false }).limit(6)
   let allBusinessesQuery = supabase.from("businesses").select("id, status, follow_up_count, created_at")
 
@@ -58,6 +59,14 @@ export default async function DashboardPage() {
   const startOfMonth = new Date(); startOfMonth.setDate(1); startOfMonth.setHours(0,0,0,0)
   const prospectosEstaSemana = prospects.filter(p => new Date(p.created_at) >= startOfWeek).length
   const prospectosMes = prospects.filter(p => new Date(p.created_at) >= startOfMonth).length
+
+  // AI leads stats
+  const aiLeads = prospects.filter(p => parseAIScore((p as { notes?: string }).notes) !== null)
+  const aiLeadsCount = aiLeads.length
+  const hotAILeads = aiLeads.filter(p => {
+    const score = parseAIScore((p as { notes?: string }).notes)
+    return score && score.score >= 80
+  }).length
   const llamadasHoyQuery = supabase.from("scheduled_calls").select("id", { count: "exact", head: true })
     .gte("scheduled_at", new Date().toISOString().split("T")[0])
     .lt("scheduled_at", new Date(Date.now() + 86400000).toISOString().split("T")[0])
@@ -125,13 +134,14 @@ export default async function DashboardPage() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-6 gap-4 mb-6">
           {[
             { label: "Prospectos", value: total, icon: "👥", color: "var(--accent)", sub: `+${prospectosEstaSemana} esta semana` },
             { label: "Este mes", value: prospectosMes, icon: "📅", color: "#8b5cf6", sub: `+${prospectosEstaSemana} esta semana` },
             { label: "Llamadas hoy", value: llamadasHoy.count || 0, icon: "📞", color: "#3b82f6", sub: `${llamadasSemana.count || 0} esta semana` },
             { label: "Cerrados", value: cerrados, icon: "🎯", color: "#22c55e", sub: `${conversionRate}% conversión` },
             { label: "Activos", value: activos, icon: "🔥", color: "#f59e0b", sub: `${misProspectos} míos` },
+            { label: "Leads AI", value: aiLeadsCount, icon: "🤖", color: "#8b5cf6", sub: hotAILeads > 0 ? `${hotAILeads} 🔥 calientes` : "Sin leads calientes" },
           ].map(kpi => (
             <div key={kpi.label} className="p-5 rounded-2xl animate-fade-in"
               style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -263,20 +273,31 @@ export default async function DashboardPage() {
             <tbody>
               {recentProspects?.map(p => {
                 const cfg = statusColors[p.status as keyof typeof statusColors] || statusColors.nuevo
+                const ai = parseAIScore(p.notes)
                 return (
                   <tr key={p.id} style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}>
                     <td className="px-4 py-3">
-                      <Link href={`/prospects/${p.id}`} className="font-medium text-sm hover:underline" style={{ color: "var(--text-primary)" }}>
-                        {p.full_name}
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link href={`/prospects/${p.id}`} className="font-medium text-sm hover:underline" style={{ color: "var(--text-primary)" }}>
+                          {p.full_name}
+                        </Link>
+                        {ai && (
+                          <span className="text-xs px-1.5 py-0.5 rounded-full font-semibold" style={{ background: "rgba(139,92,246,0.12)", color: "#8b5cf6" }}>
+                            🤖 {ai.score}pts
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs mt-0.5 truncate max-w-xs" style={{ color: "var(--text-muted)" }}>{p.headline}</p>
                     </td>
                     <td className="px-4 py-3 text-sm" style={{ color: "var(--text-secondary)" }}>{p.company || "—"}</td>
                     <td className="px-4 py-3">
-                      {p.source_type === "instagram"
-                        ? <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: "rgba(225,48,108,0.12)", color: "#e1306c" }}>IG</span>
-                        : <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: "rgba(0,119,181,0.12)", color: "#0077b5" }}>in</span>
-                      }
+                      <div className="flex items-center gap-1.5">
+                        {p.source_type === "instagram"
+                          ? <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: "rgba(225,48,108,0.12)", color: "#e1306c" }}>IG</span>
+                          : <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: "rgba(0,119,181,0.12)", color: "#0077b5" }}>in</span>
+                        }
+                        {ai && <span className="text-xs" style={{ color: getScoreColor(ai.score) }}>{getScoreEmoji(ai.score)}</span>}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-1 rounded-full text-xs" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>

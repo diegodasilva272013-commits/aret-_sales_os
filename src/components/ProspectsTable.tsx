@@ -9,9 +9,9 @@ const STATUS_CONFIG = {
   nuevo: { label: "Nuevo", color: "#6c63ff", bg: "rgba(108,99,255,0.15)" },
   activo: { label: "Activo", color: "#22c55e", bg: "rgba(34,197,94,0.15)" },
   pausado: { label: "Pausado", color: "#f59e0b", bg: "rgba(245,158,11,0.15)" },
-  llamada_agendada: { label: "Llamada Agendada", color: "#3b82f6", bg: "rgba(59,130,246,0.15)" },
-  cerrado_ganado: { label: "Cerrado ✓", color: "#22c55e", bg: "rgba(34,197,94,0.15)" },
-  cerrado_perdido: { label: "Cerrado ✗", color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
+  llamada_agendada: { label: "Agendada", color: "#3b82f6", bg: "rgba(59,130,246,0.15)" },
+  cerrado_ganado: { label: "Ganado ✓", color: "#22c55e", bg: "rgba(34,197,94,0.15)" },
+  cerrado_perdido: { label: "Perdido ✗", color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
 }
 
 const PHASE_CONFIG = {
@@ -87,14 +87,14 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
       <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
         <table style={{ width: "100%", tableLayout: "fixed" }}>
           <colgroup>
-            <col style={{ width: "26%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "13%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "10%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "12%" }} />
             <col style={{ width: "8%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "12%" }} />
           </colgroup>
           <thead>
             <tr style={{ background: "var(--surface)" }}>
@@ -155,7 +155,7 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                     </span>
                   </td>
                   <td className="px-4 py-4">
-                    <span className="px-2 py-1 rounded-full text-xs" style={{ background: statusCfg.bg, color: statusCfg.color }}>
+                    <span className="px-2 py-1 rounded-full text-xs" style={{ background: statusCfg.bg, color: statusCfg.color, whiteSpace: "nowrap" }}>
                       {statusCfg.label}
                     </span>
                   </td>

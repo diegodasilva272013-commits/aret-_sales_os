@@ -19,7 +19,10 @@ export default function AutopilotPanel({ userName }: { userName?: string }) {
   const [briefingLoading, setBriefingLoading] = useState(false)
   const [displayedText, setDisplayedText] = useState("")
   const [showActions, setShowActions] = useState(false)
+  const [speaking, setSpeaking] = useState(false)
+  const [audioLoading, setAudioLoading] = useState(false)
   const typewriterRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // Load actions
   useEffect(() => {
@@ -88,6 +91,63 @@ export default function AutopilotPanel({ userName }: { userName?: string }) {
     setShowActions(true)
   }
 
+  // Text-to-speech
+  async function toggleSpeak() {
+    // If already playing, stop
+    if (speaking && audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      setSpeaking(false)
+      return
+    }
+
+    if (!briefing) return
+    setAudioLoading(true)
+
+    try {
+      const res = await fetch("/api/autopilot/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: briefing }),
+      })
+      if (!res.ok) return
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+
+      // Skip typewriter and show full text when voice starts
+      skipTypewriter()
+
+      audio.onended = () => {
+        setSpeaking(false)
+        URL.revokeObjectURL(url)
+      }
+      audio.onerror = () => {
+        setSpeaking(false)
+        URL.revokeObjectURL(url)
+      }
+
+      setSpeaking(true)
+      await audio.play()
+    } catch {
+      // silent
+    } finally {
+      setAudioLoading(false)
+    }
+  }
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+    }
+  }, [])
+
   if (loading) {
     return (
       <div className="rounded-2xl p-6 mb-6 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -120,11 +180,41 @@ export default function AutopilotPanel({ userName }: { userName?: string }) {
             </div>
           </div>
           {actions.length > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: actions[0]?.type === "respond_now" ? "rgba(239,68,68,0.12)" : "rgba(108,99,255,0.10)" }}>
-              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: actions[0]?.type === "respond_now" ? "#ef4444" : "#6c63ff" }} />
-              <span className="text-xs font-semibold" style={{ color: actions[0]?.type === "respond_now" ? "#ef4444" : "#6c63ff" }}>
-                {actions[0]?.type === "respond_now" ? "Urgente" : "Activo"}
-              </span>
+            <div className="flex items-center gap-2">
+              {/* Voice button */}
+              {briefing && !briefingLoading && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleSpeak() }}
+                  disabled={audioLoading}
+                  className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:scale-105"
+                  style={{
+                    background: speaking ? "rgba(108,99,255,0.2)" : "var(--surface-2)",
+                    border: speaking ? "1px solid rgba(108,99,255,0.4)" : "1px solid var(--border)",
+                  }}
+                  title={speaking ? "Detener" : "Escuchar briefing"}
+                >
+                  {audioLoading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#6c63ff", borderTopColor: "transparent" }} />
+                  ) : speaking ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#6c63ff">
+                      <rect x="6" y="4" width="4" height="16" rx="1" />
+                      <rect x="14" y="4" width="4" height="16" rx="1" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                    </svg>
+                  )}
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: actions[0]?.type === "respond_now" ? "rgba(239,68,68,0.12)" : "rgba(108,99,255,0.10)" }}>
+                <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: actions[0]?.type === "respond_now" ? "#ef4444" : "#6c63ff" }} />
+                <span className="text-xs font-semibold" style={{ color: actions[0]?.type === "respond_now" ? "#ef4444" : "#6c63ff" }}>
+                  {actions[0]?.type === "respond_now" ? "Urgente" : "Activo"}
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -147,6 +237,26 @@ export default function AutopilotPanel({ userName }: { userName?: string }) {
                 <span className="inline-block w-0.5 h-4 ml-0.5 animate-pulse" style={{ background: "#6c63ff", verticalAlign: "text-bottom" }} />
               )}
             </p>
+          )}
+          {/* Audio waveform indicator */}
+          {speaking && (
+            <div className="flex items-center gap-1.5 mt-3 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+              <div className="flex items-end gap-0.5 h-4">
+                {[...Array(12)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-1 rounded-full"
+                    style={{
+                      background: "#6c63ff",
+                      height: `${Math.random() * 100}%`,
+                      minHeight: "3px",
+                      animation: `pulse 0.5s ease-in-out ${i * 0.08}s infinite alternate`,
+                    }}
+                  />
+                ))}
+              </div>
+              <span className="text-[10px] font-medium" style={{ color: "#6c63ff" }}>Hablando...</span>
+            </div>
           )}
         </div>
       </div>

@@ -4,9 +4,18 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 
-type WaLine = { id: string; label: string | null; phone: string | null; status: string }
+type WaLine = { id: string; label: string | null; phone: string | null; status: string; channel_type: string }
 type WaContact = { id: string; phone: string; name: string | null; alias: string | null }
-type Variation = { body: string; media_url?: string }
+type MetaTemplate = {
+  name: string
+  language: string
+  category: string
+  body: string
+  header: string | null
+  variable_count: number
+}
+type TemplateConfig = { name: string; language: string; variable_fields?: string[] }
+type Variation = { body: string; media_url?: string; template?: TemplateConfig }
 
 const STEPS = ["Nombre y Línea", "Contactos", "Mensajes", "Anti-blocker"]
 
@@ -33,9 +42,35 @@ export default function CampaignBuilder({ lines, contacts }: { lines: WaLine[]; 
 
   // Step 3
   const [variations, setVariations] = useState<Variation[]>([{ body: "" }])
+  // Template mode (Meta only)
+  const [useTemplate, setUseTemplate] = useState(false)
+  const [templates, setTemplates] = useState<MetaTemplate[]>([])
+  const [loadingTemplates, setLoadingTemplates] = useState(false)
+  const [templateError, setTemplateError] = useState<string | null>(null)
 
   // Step 4
   const [config, setConfig] = useState(DEFAULT_CONFIG)
+
+  const selectedLine = lines.find(l => l.id === lineId)
+  const isMetaLine = selectedLine?.channel_type === "meta"
+
+  // Load templates when switching to template mode
+  const loadTemplates = async () => {
+    if (templates.length > 0) return
+    setLoadingTemplates(true)
+    setTemplateError(null)
+    try {
+      const res = await fetch("/api/whatsapp/templates")
+      const data = await res.json()
+      if (data.error) throw new Error(data.error)
+      setTemplates(data.templates || [])
+      if ((data.templates || []).length === 0) setTemplateError("No hay plantillas aprobadas en tu cuenta de Meta.")
+    } catch (e: unknown) {
+      setTemplateError(e instanceof Error ? e.message : "Error al cargar plantillas")
+    } finally {
+      setLoadingTemplates(false)
+    }
+  }
 
   const filteredContacts = contacts.filter(c => {
     if (!contactSearch) return true
@@ -75,7 +110,10 @@ export default function CampaignBuilder({ lines, contacts }: { lines: WaLine[]; 
   const canProceed = () => {
     if (step === 0) return name.trim().length > 0 && lineId !== ""
     if (step === 1) return selectedContacts.size > 0
-    if (step === 2) return variations.every(v => v.body.trim().length > 0)
+    if (step === 2) {
+      if (useTemplate) return !!variations[0]?.template?.name
+      return variations.every(v => v.body.trim().length > 0)
+    }
     return true
   }
 
@@ -269,74 +307,207 @@ export default function CampaignBuilder({ lines, contacts }: { lines: WaLine[]; 
         {/* Step 2: Compose messages */}
         {step === 2 && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-                Variaciones de mensaje ({variations.length}/5)
-              </p>
-              {variations.length < 5 && (
-                <button
-                  onClick={addVariation}
-                  className="text-xs px-3 py-1.5 rounded-lg"
-                  style={{ color: "var(--accent)", background: "rgba(108,99,255,0.1)" }}
-                >
-                  + Agregar variación
-                </button>
-              )}
+
+            {/* Toggle: texto libre vs plantilla Meta */}
+            <div className="flex gap-2 p-1 rounded-xl" style={{ background: "var(--surface-2)" }}>
+              <button
+                onClick={() => setUseTemplate(false)}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-all"
+                style={{
+                  background: !useTemplate ? "var(--surface)" : "transparent",
+                  color: !useTemplate ? "var(--text-primary)" : "var(--text-muted)",
+                  boxShadow: !useTemplate ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+                }}
+              >
+                Texto libre
+              </button>
+              <button
+                onClick={() => { setUseTemplate(true); loadTemplates() }}
+                className="flex-1 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1.5"
+                style={{
+                  background: useTemplate ? "var(--surface)" : "transparent",
+                  color: useTemplate ? "var(--accent)" : "var(--text-muted)",
+                  boxShadow: useTemplate ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                Plantilla Meta
+              </button>
             </div>
 
-            {variations.map((v, i) => (
-              <div key={i} className="rounded-xl p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--accent)", color: "white" }}>
-                    {String.fromCharCode(65 + i)}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {/* Variable buttons */}
-                    {["[name]", "[alias]", "[phone]"].map(variable => (
-                      <button
-                        key={variable}
-                        onClick={() => insertVariable(i, variable)}
-                        className="text-xs px-2 py-1 rounded-lg font-mono"
-                        style={{ color: "var(--text-muted)", background: "var(--surface)", border: "1px solid var(--border)" }}
-                      >
-                        {variable}
-                      </button>
-                    ))}
-                    {variations.length > 1 && (
-                      <button
-                        onClick={() => removeVariation(i)}
-                        className="text-xs px-2 py-1 rounded-lg"
-                        style={{ color: "var(--danger)", background: "rgba(239,68,68,0.08)" }}
-                      >
-                        Quitar
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <textarea
-                  value={v.body}
-                  onChange={e => setVariations(prev => prev.map((vr, vi) => vi === i ? { ...vr, body: e.target.value } : vr))}
-                  placeholder={`Hola [name], te escribo porque...`}
-                  rows={4}
-                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
-                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
-                />
-                <div className="flex items-center gap-2 mt-2">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-                    <polyline points="21 15 16 10 5 21"/>
-                  </svg>
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Media (imagen/video) — disponible cuando el servidor Baileys esté activo
-                  </span>
-                </div>
+            {/* Info banner según modo */}
+            {!useTemplate && (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl text-xs" style={{ background: "rgba(234,179,8,0.07)", border: "1px solid rgba(234,179,8,0.2)", color: "#eab308" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 mt-0.5">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span>El texto libre solo funciona dentro de la ventana de 24hs. Si el contacto no te escribió recientemente, usá <strong>Plantilla Meta</strong>.</span>
               </div>
-            ))}
+            )}
+            {useTemplate && (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl text-xs" style={{ background: "rgba(34,197,94,0.07)", border: "1px solid rgba(34,197,94,0.2)", color: "#22c55e" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 mt-0.5">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                <span>Las plantillas aprobadas por Meta se envían <strong>sin límite de 24hs</strong>. Ideal para primer contacto en frío.</span>
+              </div>
+            )}
 
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Tip: Las variables [name], [alias], [phone] se reemplazan con los datos de cada contacto.
-                Las variaciones se distribuyen aleatoriamente entre los contactos.
-            </p>
+            {/* Modo texto libre */}
+            {!useTemplate && (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                    Variaciones ({variations.length}/5)
+                  </p>
+                  {variations.length < 5 && (
+                    <button onClick={addVariation} className="text-xs px-3 py-1.5 rounded-lg"
+                      style={{ color: "var(--accent)", background: "rgba(108,99,255,0.1)" }}>
+                      + Agregar variación
+                    </button>
+                  )}
+                </div>
+
+                {variations.map((v, i) => (
+                  <div key={i} className="rounded-xl p-4" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: "var(--accent)", color: "white" }}>
+                        {String.fromCharCode(65 + i)}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {["[name]", "[alias]", "[phone]"].map(variable => (
+                          <button key={variable} onClick={() => insertVariable(i, variable)}
+                            className="text-xs px-2 py-1 rounded-lg font-mono"
+                            style={{ color: "var(--text-muted)", background: "var(--surface)", border: "1px solid var(--border)" }}>
+                            {variable}
+                          </button>
+                        ))}
+                        {variations.length > 1 && (
+                          <button onClick={() => removeVariation(i)} className="text-xs px-2 py-1 rounded-lg"
+                            style={{ color: "var(--danger)", background: "rgba(239,68,68,0.08)" }}>
+                            Quitar
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <textarea
+                      value={v.body}
+                      onChange={e => setVariations(prev => prev.map((vr, vi) => vi === i ? { ...vr, body: e.target.value } : vr))}
+                      placeholder="Hola [name], te escribo porque..."
+                      rows={4}
+                      className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
+                      style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                    />
+                  </div>
+                ))}
+                <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Las variables [name], [alias], [phone] se reemplazan con los datos de cada contacto.
+                </p>
+              </>
+            )}
+
+            {/* Modo plantilla */}
+            {useTemplate && (
+              <div className="space-y-3">
+                {loadingTemplates ? (
+                  <div className="flex items-center justify-center py-10 gap-3">
+                    <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: "var(--border)", borderTopColor: "var(--accent)" }} />
+                    <span className="text-sm" style={{ color: "var(--text-muted)" }}>Cargando plantillas...</span>
+                  </div>
+                ) : templateError ? (
+                  <div className="text-sm px-4 py-3 rounded-xl" style={{ background: "rgba(239,68,68,0.08)", color: "var(--danger)", border: "1px solid rgba(239,68,68,0.15)" }}>
+                    {templateError}
+                  </div>
+                ) : templates.length === 0 ? (
+                  <p className="text-sm text-center py-8" style={{ color: "var(--text-muted)" }}>
+                    No se encontraron plantillas aprobadas.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                      Seleccioná una plantilla aprobada:
+                    </p>
+                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                      {templates.map(t => {
+                        const isSelected = variations[0]?.template?.name === t.name
+                        return (
+                          <div
+                            key={t.name + t.language}
+                            onClick={() => {
+                              setVariations([{
+                                body: t.body,
+                                template: { name: t.name, language: t.language, variable_fields: t.variable_count > 0 ? ["name"] : [] },
+                              }])
+                            }}
+                            className="rounded-xl p-4 cursor-pointer transition-all"
+                            style={{
+                              border: `1px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
+                              background: isSelected ? "rgba(108,99,255,0.06)" : "var(--surface-2)",
+                            }}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-mono font-medium" style={{ color: "var(--text-primary)" }}>{t.name}</span>
+                                <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(34,197,94,0.12)", color: "#22c55e" }}>
+                                  {t.language}
+                                </span>
+                                {t.variable_count > 0 && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "rgba(108,99,255,0.12)", color: "var(--accent)" }}>
+                                    {t.variable_count} variable{t.variable_count > 1 ? "s" : ""}
+                                  </span>
+                                )}
+                              </div>
+                              {isSelected && (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)" stroke="none">
+                                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5l-4-4 1.41-1.41L10 13.67l6.59-6.59L18 8.5l-8 8z"/>
+                                </svg>
+                              )}
+                            </div>
+                            <p className="text-xs mt-1 line-clamp-2" style={{ color: "var(--text-muted)" }}>{t.body}</p>
+
+                            {/* Si tiene variables, mostrar mapeo */}
+                            {isSelected && t.variable_count > 0 && (
+                              <div className="mt-3 pt-3 border-t space-y-2" style={{ borderColor: "var(--border)" }}>
+                                <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                                  Mapear variables:
+                                </p>
+                                {Array.from({ length: t.variable_count }, (_, vi) => (
+                                  <div key={vi} className="flex items-center gap-2">
+                                    <span className="text-xs font-mono px-2 py-1 rounded" style={{ background: "var(--surface)", color: "var(--accent)", minWidth: "40px", textAlign: "center" }}>
+                                      {`{{${vi + 1}}}`}
+                                    </span>
+                                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>→</span>
+                                    <select
+                                      value={variations[0]?.template?.variable_fields?.[vi] || "name"}
+                                      onChange={e => {
+                                        setVariations(prev => {
+                                          const fields = [...(prev[0]?.template?.variable_fields || [])]
+                                          fields[vi] = e.target.value
+                                          return [{ ...prev[0], template: { ...prev[0].template!, variable_fields: fields } }]
+                                        })
+                                      }}
+                                      className="flex-1 px-2 py-1.5 rounded-lg text-xs outline-none"
+                                      style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                                    >
+                                      <option value="name">Nombre del contacto</option>
+                                      <option value="alias">Alias del contacto</option>
+                                      <option value="phone">Teléfono</option>
+                                    </select>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -24,10 +24,16 @@ type QueueItem = {
   status: string
 }
 
+type TemplateConfig = {
+  name: string
+  language: string
+  variable_fields?: string[] // contact field names to map to {{1}}, {{2}}, etc. e.g. ["name", "phone"]
+}
+
 type Campaign = {
   id: string
   status: string
-  variations: { body: string; media_url?: string }[]
+  variations: { body: string; media_url?: string; template?: TemplateConfig }[]
   block_size: number
   pause_minutes: number
   delay_seconds: number
@@ -159,10 +165,27 @@ export async function runSendEngine(campaignId: string): Promise<void> {
       phone: item.phone,
     })
 
+    // Build template payload if this variation uses a template
+    let templatePayload: import("./channel-router").TemplatePayload | undefined
+    if (variation.template?.name) {
+      const fields = variation.template.variable_fields || []
+      const contactData: Record<string, string> = {
+        name: item.name || "",
+        phone: item.phone,
+      }
+      const variables = fields.map(f => contactData[f] || "").filter(Boolean)
+      templatePayload = {
+        name: variation.template.name,
+        language: variation.template.language || "es",
+        variables: variables.length > 0 ? variables : undefined,
+      }
+    }
+
     const result = await routeChannel({
       phone: item.phone,
       body,
       media_url: variation.media_url,
+      template: templatePayload,
       line: typedLine,
       contact: { name: item.name },
     })

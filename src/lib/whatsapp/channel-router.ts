@@ -10,10 +10,17 @@ export type SendResult = {
   error?: string
 }
 
+export type TemplatePayload = {
+  name: string          // template name in Meta (e.g. "hello_world")
+  language: string      // e.g. "es" | "es_AR" | "en_US"
+  variables?: string[]  // values for {{1}}, {{2}}, etc. in body component
+}
+
 export type SendPayload = {
   phone: string
   body: string
   media_url?: string
+  template?: TemplatePayload  // if set, sends as template (bypasses 24h window)
   line: {
     id: string
     channel_type: string
@@ -40,7 +47,7 @@ export async function routeChannel(payload: SendPayload): Promise<SendResult> {
  * Send a message via Meta Cloud API.
  */
 export async function sendViaMeta(payload: SendPayload): Promise<SendResult> {
-  const { phone, body, media_url, line } = payload
+  const { phone, body, media_url, line, template } = payload
 
   const phoneNumberId = line.meta_phone_id || process.env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
@@ -52,8 +59,28 @@ export async function sendViaMeta(payload: SendPayload): Promise<SendResult> {
 
   let msgBody: Record<string, unknown>
 
-  if (media_url) {
-    // Image message
+  if (template) {
+    // Template message — works outside the 24h conversation window
+    const components: Record<string, unknown>[] = []
+
+    if (template.variables && template.variables.length > 0) {
+      components.push({
+        type: "body",
+        parameters: template.variables.map(v => ({ type: "text", text: v })),
+      })
+    }
+
+    msgBody = {
+      messaging_product: "whatsapp",
+      to: phone,
+      type: "template",
+      template: {
+        name: template.name,
+        language: { code: template.language },
+        ...(components.length > 0 ? { components } : {}),
+      },
+    }
+  } else if (media_url) {
     msgBody = {
       messaging_product: "whatsapp",
       to: phone,

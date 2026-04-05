@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { after } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { runSendEngine } from "@/lib/whatsapp/send-engine"
 
@@ -34,14 +35,13 @@ export async function POST(req: NextRequest) {
     .update({ status: "running", updated_at: new Date().toISOString() })
     .eq("id", campaign_id)
 
-  // TODO: In production, trigger this via a real background worker (BullMQ, Inngest, etc.)
-  // For now, we trigger the engine asynchronously using setImmediate.
-  // Note: In serverless environments (Vercel), the function may be killed before completing.
-  // The engine is designed to be resumable (it reads pending queue items on each run).
-  setImmediate(() => {
-    runSendEngine(campaign_id).catch(err => {
+  // Run send engine after response is sent — after() keeps the serverless function alive on Vercel
+  after(async () => {
+    try {
+      await runSendEngine(campaign_id)
+    } catch (err) {
       console.error("[send/start] Engine error:", err)
-    })
+    }
   })
 
   return NextResponse.json({ ok: true, status: "running" })

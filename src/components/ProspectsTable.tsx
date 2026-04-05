@@ -55,7 +55,7 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
   return (
     <div className="animate-fade-in">
       {/* Filters */}
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
+      <div className="flex items-center gap-3 mb-3">
         <div className="relative flex-1 min-w-48">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-muted)" }}>
             <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
@@ -72,11 +72,21 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
         {[
           { value: filterStatus, set: setFilterStatus, options: [["todos", "Todos los estados"], ...Object.entries(STATUS_CONFIG).map(([k, v]) => [k, v.label])] },
           { value: filterPhase, set: setFilterPhase, options: [["todas", "Todas las fases"], ...Object.entries(PHASE_CONFIG).map(([k, v]) => [k, v.label])] },
+        ].map((f, i) => (
+          <select key={i} value={f.value} onChange={e => f.set(e.target.value)}
+            className="px-3 py-2.5 rounded-xl text-sm outline-none cursor-pointer"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}>
+            {f.options.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
+          </select>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 mb-5">
+        {[
           { value: filterSetter, set: setFilterSetter, options: [["todos", "Todos los setters"], ["mios", "Mis prospectos"], ["otros", "Otros setters"]] },
           { value: filterSource, set: setFilterSource, options: [["todos", "Todas las fuentes"], ["ai", "🤖 Leads AI"], ["manual", "Manuales"]] },
         ].map((f, i) => (
-          <select key={i} value={f.value} onChange={e => f.set(e.target.value)}
-            className="px-4 py-2.5 rounded-xl text-sm outline-none cursor-pointer"
+          <select key={`row2-${i}`} value={f.value} onChange={e => f.set(e.target.value)}
+            className="px-3 py-2.5 rounded-xl text-sm outline-none cursor-pointer"
             style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}>
             {f.options.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
           </select>
@@ -140,7 +150,9 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-4 text-sm" style={{ color: "var(--text-secondary)" }}>{p.company || "—"}</td>
+                  <td className="px-4 py-4 text-sm max-w-[180px]" style={{ color: "var(--text-secondary)" }}>
+                    <span className="block truncate">{p.company || "—"}</span>
+                  </td>
                   <td className="px-4 py-4">
                     <span className="px-2 py-1 rounded-full text-xs" style={{ background: `${phaseCfg.color}20`, color: phaseCfg.color }}>
                       {phaseCfg.label}

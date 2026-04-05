@@ -85,16 +85,16 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
 
       {/* Table */}
       <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
-        <table className="w-full table-fixed">
+        <table style={{ width: "100%", tableLayout: "fixed" }}>
           <colgroup>
-            <col className="w-[28%]" />
-            <col className="w-[14%]" />
-            <col className="w-[9%]" />
-            <col className="w-[11%]" />
-            <col className="w-[12%]" />
-            <col className="w-[10%]" />
-            <col className="w-[10%]" />
-            <col className="w-[6%]" />
+            <col style={{ width: "26%" }} />
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "9%" }} />
+            <col style={{ width: "11%" }} />
+            <col style={{ width: "13%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "8%" }} />
           </colgroup>
           <thead>
             <tr style={{ background: "var(--surface)" }}>
@@ -124,10 +124,10 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                   style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}
                   onMouseEnter={e => (e.currentTarget.style.background = "var(--surface)")}
                   onMouseLeave={e => (e.currentTarget.style.background = "var(--surface-2)")}>
-                  <td className="px-4 py-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{p.full_name}</p>
+                  <td className="px-4 py-4" style={{ overflow: "hidden" }}>
+                    <div style={{ overflow: "hidden" }}>
+                      <div className="flex items-center gap-2" style={{ flexWrap: "nowrap" }}>
+                        <p className="text-sm font-medium" style={{ color: "var(--text-primary)", whiteSpace: "nowrap" }}>{p.full_name}</p>
                         {(p as { source_type?: string }).source_type === "instagram" ? (
                           <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ background: "rgba(225,48,108,0.12)", color: "#e1306c", border: "1px solid rgba(225,48,108,0.25)" }}>IG</span>
                         ) : (
@@ -140,14 +140,14 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                           </span>
                         )}
                       </div>
-                      <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
+                      <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {p.headline}
                         {ai && <span className="font-semibold ml-1" style={{ color: getScoreColor(ai.score) }}>{getScoreEmoji(ai.score)} {ai.score}pts</span>}
                       </p>
                     </div>
                   </td>
-                  <td className="px-4 py-4 text-sm overflow-hidden" style={{ color: "var(--text-secondary)" }}>
-                    <span className="block truncate">{p.company || "—"}</span>
+                  <td className="px-4 py-4 text-sm" style={{ color: "var(--text-secondary)", overflow: "hidden" }}>
+                    <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.company || "—"}</span>
                   </td>
                   <td className="px-4 py-4">
                     <span className="px-2 py-1 rounded-full text-xs" style={{ background: `${phaseCfg.color}20`, color: phaseCfg.color }}>

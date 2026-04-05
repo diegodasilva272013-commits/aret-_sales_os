@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import Link from "next/link"
 import { parseAIScore, getScoreColor, getScoreEmoji } from "@/lib/parseAIScore"
 import AutopilotPanel from "@/components/AutopilotPanel"
+import PatternsEngine from "@/components/PatternsEngine"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -136,6 +137,9 @@ export default async function DashboardPage() {
 
         {/* Areté IA OS - Autopilot Panel */}
         <AutopilotPanel userName={profile?.full_name || ""} />
+
+        {/* Motor de Patrones */}
+        <PatternsEngine />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-6 gap-4 mb-6">

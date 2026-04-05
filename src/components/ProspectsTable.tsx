@@ -55,8 +55,8 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
   return (
     <div className="animate-fade-in">
       {/* Filters */}
-      <div className="flex items-center gap-3 mb-3">
-        <div className="relative flex-1 min-w-48">
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-muted)" }}>
             <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
           </svg>
@@ -64,29 +64,19 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nombre o empresa..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none"
+            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm outline-none"
             style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
           />
         </div>
 
         {[
-          { value: filterStatus, set: setFilterStatus, options: [["todos", "Todos los estados"], ...Object.entries(STATUS_CONFIG).map(([k, v]) => [k, v.label])] },
-          { value: filterPhase, set: setFilterPhase, options: [["todas", "Todas las fases"], ...Object.entries(PHASE_CONFIG).map(([k, v]) => [k, v.label])] },
+          { value: filterStatus, set: setFilterStatus, options: [["todos", "Estado"], ...Object.entries(STATUS_CONFIG).map(([k, v]) => [k, v.label])] },
+          { value: filterPhase, set: setFilterPhase, options: [["todas", "Fase"], ...Object.entries(PHASE_CONFIG).map(([k, v]) => [k, v.label])] },
+          { value: filterSetter, set: setFilterSetter, options: [["todos", "Setter"], ["mios", "Míos"], ["otros", "Otros"]] },
+          { value: filterSource, set: setFilterSource, options: [["todos", "Fuente"], ["ai", "🤖 AI"], ["manual", "Manual"]] },
         ].map((f, i) => (
           <select key={i} value={f.value} onChange={e => f.set(e.target.value)}
-            className="px-3 py-2.5 rounded-xl text-sm outline-none cursor-pointer"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}>
-            {f.options.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
-          </select>
-        ))}
-      </div>
-      <div className="flex items-center gap-3 mb-5">
-        {[
-          { value: filterSetter, set: setFilterSetter, options: [["todos", "Todos los setters"], ["mios", "Mis prospectos"], ["otros", "Otros setters"]] },
-          { value: filterSource, set: setFilterSource, options: [["todos", "Todas las fuentes"], ["ai", "🤖 Leads AI"], ["manual", "Manuales"]] },
-        ].map((f, i) => (
-          <select key={`row2-${i}`} value={f.value} onChange={e => f.set(e.target.value)}
-            className="px-3 py-2.5 rounded-xl text-sm outline-none cursor-pointer"
+            className="px-3 py-2 rounded-xl text-xs outline-none cursor-pointer"
             style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}>
             {f.options.map(([val, label]) => <option key={val} value={val}>{label}</option>)}
           </select>
@@ -95,7 +85,17 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
 
       {/* Table */}
       <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
-        <table className="w-full">
+        <table className="w-full table-fixed">
+          <colgroup>
+            <col className="w-[28%]" />
+            <col className="w-[14%]" />
+            <col className="w-[9%]" />
+            <col className="w-[11%]" />
+            <col className="w-[12%]" />
+            <col className="w-[10%]" />
+            <col className="w-[10%]" />
+            <col className="w-[6%]" />
+          </colgroup>
           <thead>
             <tr style={{ background: "var(--surface)" }}>
               {["Prospecto", "Empresa", "Fase", "Estado", "Follow-ups", "Último contacto", "Setter", ""].map(h => (
@@ -140,17 +140,13 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                           </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-xs truncate max-w-xs" style={{ color: "var(--text-muted)" }}>{p.headline}</p>
-                        {ai && (
-                          <span className="text-xs font-semibold shrink-0" style={{ color: getScoreColor(ai.score) }}>
-                            {getScoreEmoji(ai.score)} {ai.score}pts
-                          </span>
-                        )}
-                      </div>
+                      <p className="text-xs truncate mt-0.5" style={{ color: "var(--text-muted)" }}>
+                        {p.headline}
+                        {ai && <span className="font-semibold ml-1" style={{ color: getScoreColor(ai.score) }}>{getScoreEmoji(ai.score)} {ai.score}pts</span>}
+                      </p>
                     </div>
                   </td>
-                  <td className="px-4 py-4 text-sm max-w-[180px]" style={{ color: "var(--text-secondary)" }}>
+                  <td className="px-4 py-4 text-sm overflow-hidden" style={{ color: "var(--text-secondary)" }}>
                     <span className="block truncate">{p.company || "—"}</span>
                   </td>
                   <td className="px-4 py-4">

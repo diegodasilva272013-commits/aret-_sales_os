@@ -125,7 +125,7 @@ export default function MessagesInbox({ conversations, orgId }: { conversations:
   })
 
   return (
-    <div className="flex h-screen" style={{ background: "var(--background)" }}>
+    <div className="flex h-screen animate-fade-in" style={{ background: "var(--background)" }}>
 
       {/* Panel izquierdo — lista de conversaciones */}
       <div className="w-80 flex flex-col shrink-0" style={{ background: "var(--surface)", borderRight: "1px solid var(--border)" }}>

@@ -42,7 +42,7 @@ export default function DynamicScoreCard({ prospectId }: { prospectId: string })
   const deltaColor = data.delta > 0 ? "#22c55e" : data.delta < 0 ? "#ef4444" : "var(--text-muted)"
 
   return (
-    <div className="mb-6 rounded-2xl overflow-hidden animate-fade-in"
+    <div className="mb-6 rounded-2xl overflow-hidden animate-scale-pop card-hover"
       style={{ border: `1px solid ${color}40` }}>
 
       {/* Header */}

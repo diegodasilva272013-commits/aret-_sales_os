@@ -88,7 +88,7 @@ export default function PatternsEngine() {
   }
 
   return (
-    <div className="rounded-2xl mb-6 overflow-hidden animate-fade-in" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+    <div className="rounded-2xl mb-6 overflow-hidden animate-scale-pop" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
       {/* Header */}
       <div className="p-6 pb-4">
         <div className="flex items-center justify-between mb-4">

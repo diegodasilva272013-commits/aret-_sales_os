@@ -147,7 +147,7 @@ export default function WorkflowsManager() {
   }
 
   return (
-    <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+    <div className="page-enter" style={{ maxWidth: 1000, margin: "0 auto" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
         <div>

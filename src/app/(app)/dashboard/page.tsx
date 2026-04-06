@@ -108,7 +108,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen p-8" style={{ background: "var(--background)" }}>
+    <div className="min-h-screen p-8 page-enter" style={{ background: "var(--background)" }}>
       <div className="max-w-7xl mx-auto">
 
         {/* Header */}
@@ -120,7 +120,7 @@ export default async function DashboardPage() {
           </div>
           <div className="flex gap-3">
             <Link href="/export/prospects"
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium btn-press"
               style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -128,7 +128,7 @@ export default async function DashboardPage() {
               Exportar CSV
             </Link>
             <Link href="/prospects/new"
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold btn-press"
               style={{ background: "linear-gradient(135deg, var(--accent), #7c3aed)", color: "white" }}>
               + Nuevo Prospecto
             </Link>
@@ -142,7 +142,7 @@ export default async function DashboardPage() {
         <PatternsEngine />
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-6 gap-4 mb-6 stagger">
           {[
             { label: "Prospectos", value: total, icon: "👥", color: "var(--accent)", sub: `+${prospectosEstaSemana} esta semana` },
             { label: "Este mes", value: prospectosMes, icon: "📅", color: "#8b5cf6", sub: `+${prospectosEstaSemana} esta semana` },
@@ -151,7 +151,7 @@ export default async function DashboardPage() {
             { label: "Activos", value: activos, icon: "🔥", color: "#f59e0b", sub: `${misProspectos} míos` },
             { label: "Leads AI", value: aiLeadsCount, icon: "🤖", color: "#8b5cf6", sub: hotAILeads > 0 ? `${hotAILeads} 🔥 calientes` : "Sin leads calientes" },
           ].map(kpi => (
-            <div key={kpi.label} className="p-5 rounded-2xl animate-fade-in"
+            <div key={kpi.label} className="p-5 rounded-2xl stagger-item card-hover gradient-border"
               style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
               <div className="flex items-start justify-between mb-3">
                 <span className="text-xl">{kpi.icon}</span>
@@ -160,7 +160,7 @@ export default async function DashboardPage() {
                   <div className="w-2 h-2 rounded-full" style={{ background: kpi.color }} />
                 </div>
               </div>
-              <p className="text-3xl font-bold" style={{ color: kpi.color }}>{kpi.value}</p>
+              <p className="text-3xl font-bold number-roll" style={{ color: kpi.color }}>{kpi.value}</p>
               <p className="text-xs mt-1 font-medium" style={{ color: "var(--text-primary)" }}>{kpi.label}</p>
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>{kpi.sub}</p>
             </div>
@@ -169,7 +169,7 @@ export default async function DashboardPage() {
 
         <div className={`grid ${isOwner ? "grid-cols-3" : "grid-cols-2"} gap-4 mb-6`}>
           {/* Fase distribution */}
-          <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div className="p-5 rounded-2xl card-hover animate-slide-up" style={{ background: "var(--surface)", border: "1px solid var(--border)", animationDelay: "0.1s", animationFillMode: "backwards" }}>
             <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Pipeline por Fase</h3>
             {[
               { label: "Contacto", count: prospects.filter(p => p.phase === "contacto").length, color: "#6c63ff" },
@@ -181,8 +181,8 @@ export default async function DashboardPage() {
                   <span>{item.label}</span>
                   <span className="font-semibold">{item.count}</span>
                 </div>
-                <div className="w-full h-1.5 rounded-full" style={{ background: "var(--surface-2)" }}>
-                  <div className="h-full rounded-full" style={{
+                <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--surface-2)" }}>
+                  <div className="h-full rounded-full animate-progress" style={{
                     width: `${total > 0 ? (item.count / total) * 100 : 0}%`,
                     background: item.color,
                   }} />
@@ -198,7 +198,7 @@ export default async function DashboardPage() {
           </div>
 
           {/* Setters ranking - solo visible para owners */}
-          {isOwner && <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          {isOwner && <div className="p-5 rounded-2xl card-hover animate-slide-up" style={{ background: "var(--surface)", border: "1px solid var(--border)", animationDelay: "0.2s", animationFillMode: "backwards" }}>
             <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Ranking Setters</h3>
             {setterStats.length === 0 ? (
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>Sin datos todavía</p>
@@ -226,7 +226,7 @@ export default async function DashboardPage() {
           </div>}
 
           {/* Plan usage */}
-          <div className="p-5 rounded-2xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div className="p-5 rounded-2xl card-hover animate-slide-up" style={{ background: "var(--surface)", border: "1px solid var(--border)", animationDelay: "0.3s", animationFillMode: "backwards" }}>
             <h3 className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>Uso del Plan</h3>
             <p className="text-xs mb-4 capitalize" style={{ color: "var(--text-muted)" }}>Plan {org?.plan || "free"}</p>
             <div className="flex items-end gap-2 mb-3">
@@ -262,7 +262,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Recent prospects */}
-        <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+        <div className="rounded-2xl overflow-hidden animate-slide-up" style={{ border: "1px solid var(--border)", animationDelay: "0.35s", animationFillMode: "backwards" }}>
           <div className="flex items-center justify-between px-5 py-4" style={{ background: "var(--surface)" }}>
             <h3 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>Actividad Reciente</h3>
             <Link href="/prospects" className="text-xs hover:underline" style={{ color: "var(--accent-light)" }}>
@@ -283,7 +283,9 @@ export default async function DashboardPage() {
                 const cfg = statusColors[p.status as keyof typeof statusColors] || statusColors.nuevo
                 const ai = parseAIScore(p.notes)
                 return (
-                  <tr key={p.id} style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}>
+                  <tr key={p.id} className="row-hover" style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)", transition: "background 0.2s ease" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--surface)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "var(--surface-2)")}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Link href={`/prospects/${p.id}`} className="font-medium text-sm hover:underline" style={{ color: "var(--text-primary)" }}>

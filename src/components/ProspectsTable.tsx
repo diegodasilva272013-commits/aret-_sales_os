@@ -62,7 +62,7 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
   })
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in page-enter">
       {/* Filters */}
       <div className="flex items-center gap-2 mb-5 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
@@ -122,15 +122,16 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                   No hay prospectos que coincidan con los filtros
                 </td>
               </tr>
-            ) : filtered.map(p => {
+            ) : filtered.map((p, idx) => {
               const statusCfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.nuevo
               const phaseCfg = PHASE_CONFIG[p.phase] || PHASE_CONFIG.contacto
               const isOwn = p.assigned_to === currentUserId
               const ai = aiScoreMap.get(p.id)
+              const isHot = ai && ai.score >= 80
 
               return (
-                <tr key={p.id} className="transition-colors"
-                  style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}
+                <tr key={p.id} className="row-hover animate-slide-up"
+                  style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)", animationDelay: `${Math.min(idx * 0.04, 0.4)}s`, animationFillMode: "backwards" }}
                   onMouseEnter={e => (e.currentTarget.style.background = "var(--surface)")}
                   onMouseLeave={e => (e.currentTarget.style.background = "var(--surface-2)")}>
                   <td className="px-4 py-4" style={{ overflow: "hidden" }}>
@@ -178,7 +179,7 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                     </span>
                   </td>
                   <td className="px-3 py-4">
-                    <span className="inline-block px-2 py-1 rounded-full text-xs text-center" style={{ background: statusCfg.bg, color: statusCfg.color, whiteSpace: "nowrap", fontSize: "10px" }}>
+                    <span className={`inline-block px-2 py-1 rounded-full text-xs text-center${statusCfg === STATUS_CONFIG.cerrado_ganado ? ' animate-scale-pop' : ''}`} style={{ background: statusCfg.bg, color: statusCfg.color, whiteSpace: "nowrap", fontSize: "10px" }}>
                       {statusCfg.label}
                     </span>
                   </td>
@@ -210,8 +211,8 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                   </td>
                   <td className="px-4 py-4">
                     <Link href={`/prospects/${p.id}`}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                      style={{ background: "var(--accent-glow)", color: "var(--accent-light)", border: "1px solid rgba(108,99,255,0.2)" }}>
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium btn-press"
+                      style={{ background: "var(--accent-glow)", color: "var(--accent-light)", border: "1px solid rgba(108,99,255,0.2)", transition: "all 0.2s ease" }}>
                       Ver →
                     </Link>
                   </td>

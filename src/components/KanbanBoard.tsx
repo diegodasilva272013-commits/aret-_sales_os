@@ -113,7 +113,7 @@ export default function KanbanBoard({ initialProspects }: { initialProspects: Ka
 
   return (
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      <div className="flex gap-4 overflow-x-auto pb-4 page-enter">
         {COLUMNS.map(col => (
           <Column key={col.id} column={col}
             prospects={prospects.filter(p => p.status === col.id)} />

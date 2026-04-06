@@ -82,8 +82,8 @@ export default function BookCallModal({ prospectId, prospectName, calendlyUrl, o
     : ""
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
-      <div className="w-full rounded-2xl p-6" style={{ background: "var(--surface)", border: "1px solid var(--border)", maxWidth: method === "calendly" ? "900px" : "448px" }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)", animation: "fade-in 0.2s ease" }}>
+      <div className="w-full rounded-2xl p-6 animate-scale-pop" style={{ background: "var(--surface)", border: "1px solid var(--border)", maxWidth: method === "calendly" ? "900px" : "448px" }}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Agendar llamada</h2>

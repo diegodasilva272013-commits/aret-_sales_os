@@ -65,7 +65,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     return (
       <div className="flex h-screen overflow-hidden" style={{ background: "var(--background)" }}>
         <Sidebar profile={profile} org={profile?.organizations || null} pendingFollowUps={pendingCount || 0} unreadMessages={unreadMessages || 0} />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto" style={{ scrollBehavior: "smooth" }}>
           {children}
         </main>
       </div>

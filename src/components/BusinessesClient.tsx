@@ -67,7 +67,7 @@ export default function BusinessesClient({ businesses }: { businesses: Business[
   )
 
   return (
-    <div className="min-h-screen p-8" style={{ background: "var(--background)" }}>
+    <div className="min-h-screen p-8 page-enter" style={{ background: "var(--background)" }}>
       <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8 animate-fade-in">
           <div>

@@ -160,7 +160,7 @@ export default function Sidebar({ profile, org, pendingFollowUps = 0, unreadMess
     : "?"
 
   return (
-    <aside className="w-64 flex flex-col h-full shrink-0" style={{ background: "var(--surface)", borderRight: "1px solid var(--border)" }}>
+    <aside className="w-64 flex flex-col h-full shrink-0 animate-slide-in" style={{ background: "var(--surface)", borderRight: "1px solid var(--border)" }}>
       {/* Logo */}
       <div className="p-6 border-b" style={{ borderColor: "var(--border)" }}>
         <div className="flex items-center gap-3">
@@ -212,16 +212,17 @@ export default function Sidebar({ profile, org, pendingFollowUps = 0, unreadMess
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all",
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
                 isActive
                   ? "text-white"
-                  : "hover:text-white",
+                  : "hover:text-white hover:translate-x-0.5",
                 item.highlight && !isActive && "border"
               )}
               style={{
                 background: isActive ? "var(--accent)" : item.highlight ? "transparent" : "transparent",
                 color: isActive ? "white" : item.highlight ? "var(--accent-light)" : "var(--text-secondary)",
                 borderColor: item.highlight && !isActive ? "var(--accent)" : undefined,
+                boxShadow: isActive ? "0 0 12px rgba(108,99,255,0.3)" : undefined,
               }}
             >
               {item.icon}

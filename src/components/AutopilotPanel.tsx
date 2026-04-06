@@ -161,7 +161,7 @@ export default function AutopilotPanel({ userName }: { userName?: string }) {
   }
 
   return (
-    <div className="rounded-2xl mb-6 overflow-hidden animate-fade-in" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+    <div className="rounded-2xl mb-6 overflow-hidden animate-scale-pop" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
       {/* Agent Header + Briefing */}
       <div className="p-6 cursor-pointer" onClick={skipTypewriter} style={{ borderBottom: showActions && actions.length > 0 ? "1px solid var(--border)" : "none" }}>
         <div className="flex items-center justify-between mb-4">

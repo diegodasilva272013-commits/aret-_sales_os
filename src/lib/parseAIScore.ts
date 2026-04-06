@@ -66,3 +66,27 @@ export function getScoreEmoji(score: number): string {
   if (score >= 40) return "🔵"
   return "❄️"
 }
+
+// ─── Dynamic Score Calculation ─────────────────────────────
+export type DynamicScoreEvent = {
+  type: "wa_inbound" | "wa_outbound" | "call_completed" | "call_missed" | "follow_up_sent" | "status_change" | "decay"
+  delta: number
+  label: string
+  date?: string
+}
+
+export type DynamicScoreData = {
+  baseScore: number
+  dynamicScore: number
+  delta: number
+  events: DynamicScoreEvent[]
+  trend: "up" | "down" | "stable"
+}
+
+export function getDynamicLabel(score: number): string {
+  if (score >= 80) return "muy caliente"
+  if (score >= 60) return "caliente"
+  if (score >= 40) return "tibio"
+  if (score >= 20) return "frío"
+  return "congelado"
+}

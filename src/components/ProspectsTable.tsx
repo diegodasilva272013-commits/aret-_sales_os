@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import type { Prospect } from "@/types"
 import { parseAIScore, getScoreColor, getScoreEmoji } from "@/lib/parseAIScore"
@@ -37,6 +37,15 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
       if (score) map.set(p.id, score)
     })
     return map
+  }, [prospects])
+
+  // Fetch dynamic scores in bulk
+  const [dynamicScores, setDynamicScores] = useState<Record<string, { baseScore: number; dynamicScore: number; delta: number; trend: string }>>({})
+  useEffect(() => {
+    fetch("/api/score/dynamic?org=1")
+      .then(r => r.json())
+      .then(d => { if (d.scores) setDynamicScores(d.scores) })
+      .catch(() => {})
   }, [prospects])
 
   const filtered = prospects.filter(p => {
@@ -142,7 +151,21 @@ export default function ProspectsTable({ prospects, currentUserId }: { prospects
                       </div>
                       <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {p.headline}
-                        {ai && <span className="font-semibold ml-1" style={{ color: getScoreColor(ai.score) }}>{getScoreEmoji(ai.score)} {ai.score}pts</span>}
+                        {(() => {
+                          const ds = dynamicScores[p.id]
+                          if (ds) {
+                            const trendIcon = ds.trend === "up" ? "▲" : ds.trend === "down" ? "▼" : ""
+                            const trendColor = ds.trend === "up" ? "#22c55e" : ds.trend === "down" ? "#ef4444" : "var(--text-muted)"
+                            return (
+                              <span className="font-semibold ml-1" style={{ color: getScoreColor(ds.dynamicScore) }}>
+                                {getScoreEmoji(ds.dynamicScore)} {ds.dynamicScore}pts
+                                {ds.delta !== 0 && <span style={{ color: trendColor, fontSize: 10, marginLeft: 2 }}>{trendIcon}{ds.delta > 0 ? "+" : ""}{ds.delta}</span>}
+                              </span>
+                            )
+                          }
+                          if (ai) return <span className="font-semibold ml-1" style={{ color: getScoreColor(ai.score) }}>{getScoreEmoji(ai.score)} {ai.score}pts</span>
+                          return null
+                        })()}
                       </p>
                     </div>
                   </td>

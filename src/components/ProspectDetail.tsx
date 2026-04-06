@@ -9,6 +9,7 @@ import { parseAIScore, getScoreColor, getScoreBg, getScoreEmoji } from "@/lib/pa
 import BookCallModal from "./BookCallModal"
 import WhatsAppChat from "./WhatsAppChat"
 import VideoRecordings from "./VideoRecordings"
+import DynamicScoreCard from "./DynamicScoreCard"
 
 const STATUS_CONFIG = {
   nuevo: { label: "Nuevo", color: "#6c63ff", bg: "rgba(108,99,255,0.15)" },
@@ -521,6 +522,9 @@ export default function ProspectDetail({ prospect, analysis, messages, followUps
             </div>
           </div>
         )}
+
+        {/* Dynamic Score — behavioral overlay */}
+        <DynamicScoreCard prospectId={prospect.id} />
 
         {/* Tabs */}
         <div className="flex items-center justify-between mb-6">

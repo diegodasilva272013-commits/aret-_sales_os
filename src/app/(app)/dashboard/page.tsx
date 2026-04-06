@@ -284,9 +284,7 @@ export default async function DashboardPage() {
                 const cfg = statusColors[p.status as keyof typeof statusColors] || statusColors.nuevo
                 const ai = parseAIScore(p.notes)
                 return (
-                  <tr key={p.id} className="row-hover" style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)", transition: "background 0.2s ease" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--surface)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "var(--surface-2)")}>
+                  <tr key={p.id} className="row-hover" style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-2)" }}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Link href={`/prospects/${p.id}`} className="font-medium text-sm hover:underline" style={{ color: "var(--text-primary)" }}>

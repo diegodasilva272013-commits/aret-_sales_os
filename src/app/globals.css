@@ -210,6 +210,7 @@ html, body {
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 .row-hover:hover {
+  background: var(--surface) !important;
   box-shadow: inset 3px 0 0 var(--accent);
 }
 

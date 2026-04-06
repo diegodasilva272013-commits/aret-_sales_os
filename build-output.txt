@@ -6,27 +6,31 @@
 - Environments: .env.local
 
   Creating an optimized production build ...
-Ô£ô Compiled successfully in 108s
+Ô£ô Compiled successfully in 109s
   Skipping validation of types
-  Finished TypeScript config validation in 254ms ...
+  Finished TypeScript config validation in 275ms ...
   Collecting page data using 7 workers ...
-  Generating static pages using 7 workers (0/68) ...
-  Generating static pages using 7 workers (17/68) 
-  Generating static pages using 7 workers (34/68) 
-  Generating static pages using 7 workers (51/68) 
-Ô£ô Generating static pages using 7 workers (68/68) in 10.4s
+  Generating static pages using 7 workers (0/95) ...
+  Generating static pages using 7 workers (23/95) 
+  Generating static pages using 7 workers (47/95) 
+  Generating static pages using 7 workers (71/95) 
+Ô£ô Generating static pages using 7 workers (95/95) in 3.9s
   Finalizing page optimization ...
 
 Route (app)
 Ôöî ãÆ /
 Ôö£ Ôùï /_not-found
 Ôö£ ãÆ /admin
+Ôö£ ãÆ /api/activity-feed
 Ôö£ ãÆ /api/admin/create-user
 Ôö£ ãÆ /api/admin/remove-setter
 Ôö£ ãÆ /api/analyze
 Ôö£ ãÆ /api/analyze/regenerate
 Ôö£ ãÆ /api/auth/google
 Ôö£ ãÆ /api/auth/google/callback
+Ôö£ ãÆ /api/autopilot
+Ôö£ ãÆ /api/autopilot/briefing
+Ôö£ ãÆ /api/autopilot/speak
 Ôö£ ãÆ /api/businesses/analyze
 Ôö£ ãÆ /api/businesses/save
 Ôö£ ãÆ /api/businesses/search
@@ -43,13 +47,20 @@ Route (app)
 Ôö£ ãÆ /api/closer-metrics
 Ôö£ ãÆ /api/closer-metrics/[id]
 Ôö£ ãÆ /api/closer-metrics/summary
+Ôö£ ãÆ /api/coach
+Ôö£ ãÆ /api/inbox
 Ôö£ ãÆ /api/notes/transcribe
 Ôö£ ãÆ /api/notifications
 Ôö£ ãÆ /api/notifications/self
+Ôö£ ãÆ /api/objections
+Ôö£ ãÆ /api/patterns
 Ôö£ ãÆ /api/prospects/manual
+Ôö£ ãÆ /api/score/dynamic
 Ôö£ ãÆ /api/setup-chat
+Ôö£ ãÆ /api/smart-inbox
 Ôö£ ãÆ /api/stripe/checkout
 Ôö£ ãÆ /api/stripe/webhook
+Ôö£ ãÆ /api/timing
 Ôö£ ãÆ /api/video/composition
 Ôö£ ãÆ /api/video/composition-ready
 Ôö£ ãÆ /api/video/join
@@ -58,12 +69,27 @@ Route (app)
 Ôö£ ãÆ /api/video/room
 Ôö£ ãÆ /api/video/upload
 Ôö£ ãÆ /api/whatsapp/analyze-conversation
+Ôö£ ãÆ /api/whatsapp/campaigns
+Ôö£ ãÆ /api/whatsapp/campaigns/[id]
+Ôö£ ãÆ /api/whatsapp/contacts
+Ôö£ ãÆ /api/whatsapp/contacts/import
 Ôö£ ãÆ /api/whatsapp/debug
+Ôö£ ãÆ /api/whatsapp/lines
+Ôö£ ãÆ /api/whatsapp/lines/qr
+Ôö£ ãÆ /api/whatsapp/lines/unlink
 Ôö£ ãÆ /api/whatsapp/send
 Ôö£ ãÆ /api/whatsapp/send-audio
 Ôö£ ãÆ /api/whatsapp/send-media
+Ôö£ ãÆ /api/whatsapp/send/pause
+Ôö£ ãÆ /api/whatsapp/send/start
+Ôö£ ãÆ /api/whatsapp/send/status
+Ôö£ ãÆ /api/whatsapp/templates
 Ôö£ ãÆ /api/whatsapp/test
 Ôö£ ãÆ /api/whatsapp/webhook
+Ôö£ ãÆ /api/win-loss
+Ôö£ ãÆ /api/workflows
+Ôö£ ãÆ /api/workflows/logs
+Ôö£ ãÆ /api/workflows/run
 Ôö£ ãÆ /auth/confirm
 Ôö£ Ôùï /auth/reset
 Ôö£ ãÆ /businesses
@@ -89,12 +115,18 @@ Route (app)
 Ôö£ ãÆ /setup
 Ôö£ ãÆ /team
 Ôö£ ãÆ /video
-Ôöö ãÆ /videollamada/[roomId]
+Ôö£ ãÆ /videollamada/[roomId]
+Ôö£ ãÆ /whatsapp
+Ôö£ ãÆ /whatsapp/campaigns
+Ôö£ ãÆ /whatsapp/campaigns/new
+Ôö£ ãÆ /whatsapp/contacts
+Ôö£ ãÆ /whatsapp/lines
+Ôö£ ãÆ /whatsapp/monitor
+Ôöö ãÆ /workflows
 
 
 ãÆ Proxy (Middleware)
 
 Ôùï  (Static)   prerendered as static content
 ãÆ  (Dynamic)  server-rendered on demand
-
 

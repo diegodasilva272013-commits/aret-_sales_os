@@ -3,6 +3,7 @@ import Link from "next/link"
 import { parseAIScore, getScoreColor, getScoreEmoji } from "@/lib/parseAIScore"
 import AutopilotPanel from "@/components/AutopilotPanel"
 import PatternsEngine from "@/components/PatternsEngine"
+import TimingEngine from "@/components/TimingEngine"
 
 export default async function DashboardPage() {
   try {
@@ -141,6 +142,9 @@ export default async function DashboardPage() {
 
         {/* Motor de Patrones */}
         <PatternsEngine />
+
+        {/* Timing Inteligente */}
+        <TimingEngine />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-6 gap-4 mb-6 stagger">

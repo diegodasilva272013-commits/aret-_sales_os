@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import PhoneClient from "@/components/PhoneClient"
 
 export default async function PhonePage() {
+  try {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -36,4 +37,8 @@ export default async function PhonePage() {
   ])
 
   return <PhoneClient recordings={recordings as any} prospects={prospects as any} />
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message?.includes("NEXT_REDIRECT")) throw e
+    throw e
+  }
 }

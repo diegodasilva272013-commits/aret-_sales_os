@@ -5,6 +5,7 @@ import AutopilotPanel from "@/components/AutopilotPanel"
 import PatternsEngine from "@/components/PatternsEngine"
 
 export default async function DashboardPage() {
+  try {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -332,4 +333,8 @@ export default async function DashboardPage() {
       </div>
     </div>
   )
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message?.includes("NEXT_REDIRECT")) throw e
+    throw e
+  }
 }

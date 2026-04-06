@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import VideoClient from "@/components/VideoClient"
 
 export default async function VideoPage() {
+  try {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
@@ -44,4 +45,8 @@ export default async function VideoPage() {
     : { data: [] }
 
   return <VideoClient recordings={recordings as any} analyses={analyses as any} prospects={prospects as any} />
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message?.includes("NEXT_REDIRECT")) throw e
+    throw e
+  }
 }

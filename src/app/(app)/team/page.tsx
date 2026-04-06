@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import TeamManagementClient from "@/components/TeamManagementClient"
 
 export default async function TeamPage() {
+  try {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -47,7 +48,7 @@ export default async function TeamPage() {
   // Call recordings
   const { data: recordings } = await supabase
     .from("call_recordings")
-    .select("id, user_id, prospect_id, duration, created_at, prospects(full_name)")
+    .select("id, user_id, prospect_id, duration_seconds, created_at, prospects(full_name)")
     .eq("organization_id", orgId)
     .order("created_at", { ascending: false })
     .limit(200)
@@ -104,4 +105,8 @@ export default async function TeamPage() {
       organizationId={orgId}
     />
   )
+  } catch (e: unknown) {
+    if (e instanceof Error && e.message?.includes("NEXT_REDIRECT")) throw e
+    throw e
+  }
 }

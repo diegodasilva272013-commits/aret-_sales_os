@@ -147,6 +147,162 @@ export async function GET() {
     // Revenue from closer metrics
     const totalRevenue = (closerMetrics || []).reduce((sum, m) => sum + (m.monto_vendido || 0), 0)
 
+    // ====== INSIGHTS ACCIONABLES ======
+    type Insight = { type: "danger" | "warning" | "success" | "info"; icon: string; title: string; detail: string; action: string }
+    const insights: Insight[] = []
+
+    // 1. Phase analysis - where are deals dying?
+    const phaseEntries = Object.entries(phaseStats)
+    const worstPhase = phaseEntries
+      .filter(([, s]) => s.losses > 0)
+      .sort(([, a], [, b]) => b.losses - a.losses)[0]
+    if (worstPhase) {
+      const [phase, stats] = worstPhase
+      const phaseLossRate = Math.round((stats.losses / (stats.wins + stats.losses)) * 100)
+      if (phaseLossRate >= 50) {
+        insights.push({
+          type: "danger",
+          icon: "🚨",
+          title: `Perdés ${phaseLossRate}% de deals en fase "${phase}"`,
+          detail: `${stats.losses} de ${stats.wins + stats.losses} deals se pierden en esta fase. Es tu cuello de botella principal.`,
+          action: `Revisá los últimos 5 deals perdidos en "${phase}" y buscá el patrón: ¿es precio? ¿timing? ¿falta de urgencia?`,
+        })
+      }
+    }
+
+    // 2. Follow-up gap insight
+    if (avgFollowUpsToWin > 0 && avgFollowUpsToLoss > 0) {
+      const gap = avgFollowUpsToWin - avgFollowUpsToLoss
+      if (gap > 1) {
+        insights.push({
+          type: "warning",
+          icon: "📤",
+          title: `Dejás de seguir demasiado pronto`,
+          detail: `Los deals ganados necesitan ${avgFollowUpsToWin} follow-ups en promedio, pero los perdidos solo llegan a ${avgFollowUpsToLoss}. Hay ${gap.toFixed(1)} follow-ups de diferencia.`,
+          action: `Configurá un mínimo de ${Math.ceil(avgFollowUpsToWin)} follow-ups antes de dar un deal por perdido.`,
+        })
+      } else if (gap < -1) {
+        insights.push({
+          type: "info",
+          icon: "⏰",
+          title: `Demasiados follow-ups en deals perdidos`,
+          detail: `Invertís ${avgFollowUpsToLoss} follow-ups en deals que se pierden vs ${avgFollowUpsToWin} en los que ganás.`,
+          action: `Si al follow-up #${Math.ceil(avgFollowUpsToWin + 1)} no hay respuesta, pivoteá la estrategia o descalificá.`,
+        })
+      }
+    }
+
+    // 3. Speed to close
+    if (avgDaysToClose > 30) {
+      insights.push({
+        type: "warning",
+        icon: "⏱️",
+        title: `Tu ciclo de venta es de ${avgDaysToClose} días`,
+        detail: `Las mejores agencias cierran en 14-21 días. Un ciclo largo enfría al prospecto.`,
+        action: `Creá urgencia: oferta con deadline, caso de éxito reciente, o una demo de resultado rápida.`,
+      })
+    } else if (avgDaysToClose > 0 && avgDaysToClose <= 14) {
+      insights.push({
+        type: "success",
+        icon: "⚡",
+        title: `Ciclo de cierre rápido: ${avgDaysToClose} días`,
+        detail: `Tu velocidad de cierre es excelente. Los prospectos no se enfrían.`,
+        action: `Mantené este ritmo. Documentá qué hacés en los primeros 3 días con cada prospecto.`,
+      })
+    }
+
+    // 4. Source analysis
+    const bestSource = Object.entries(sourceStats).sort(([, a], [, b]) => {
+      const rateA = a.total > 0 ? a.wins / a.total : 0
+      const rateB = b.total > 0 ? b.wins / b.total : 0
+      return rateB - rateA
+    })[0]
+    const worstSource = Object.entries(sourceStats).filter(([, s]) => s.total >= 3).sort(([, a], [, b]) => {
+      const rateA = a.total > 0 ? a.wins / a.total : 0
+      const rateB = b.total > 0 ? b.wins / b.total : 0
+      return rateA - rateB
+    })[0]
+    if (bestSource && worstSource && bestSource[0] !== worstSource[0]) {
+      const bestRate = Math.round((bestSource[1].wins / bestSource[1].total) * 100)
+      const worstRate = Math.round((worstSource[1].wins / worstSource[1].total) * 100)
+      if (bestRate - worstRate > 20) {
+        insights.push({
+          type: "info",
+          icon: "🎯",
+          title: `"${bestSource[0]}" convierte ${bestRate}% vs "${worstSource[0]}" ${worstRate}%`,
+          detail: `Tu mejor fuente de deals es ${bestSource[0]}. Considerá redirigir esfuerzo ahí.`,
+          action: `Duplicá tu inversión en ${bestSource[0]} y reducí ${worstSource[0]} o mejorá el approach.`,
+        })
+      }
+    }
+
+    // 5. Objections insight  
+    if (topObjections.length > 0) {
+      const topObj = topObjections[0]
+      insights.push({
+        type: "warning",
+        icon: "🛡️",
+        title: `La objeción #1 es: "${topObj.objection}"`,
+        detail: `Apareció ${topObj.count} veces. Si no tenés un script preparado para esto, estás perdiendo deals.`,
+        action: `Escribí 3 respuestas diferentes para "${topObj.objection}" y practicá con el equipo.`,
+      })
+    }
+
+    // 6. Loss reasons insight
+    if (topLossReasons.length > 0) {
+      const topReason = topLossReasons[0]
+      const totalLossReasonCount = topLossReasons.reduce((s, r) => s + r.count, 0)
+      const pct = Math.round((topReason.count / totalLossReasonCount) * 100)
+      insights.push({
+        type: "danger",
+        icon: "💀",
+        title: `"${topReason.reason}" causa ${pct}% de las pérdidas`,
+        detail: `Es tu motivo principal de pérdida (${topReason.count} deals).`,
+        action: `Cambiá tu pitch para atacar "${topReason.reason}" antes de que el prospecto lo mencione.`,
+      })
+    }
+
+    // 7. Win rate overall
+    if (winRate < 25) {
+      insights.push({
+        type: "danger",
+        icon: "📉",
+        title: `Win rate crítico: ${winRate}%`,
+        detail: `De cada 4 deals, cerrás menos de 1. El benchmark es 30-40%.`,
+        action: `Enfocate en calificar mejor: solo invertí tiempo en prospectos con presupuesto confirmado.`,
+      })
+    } else if (winRate >= 50) {
+      insights.push({
+        type: "success",
+        icon: "🏆",
+        title: `Win rate excelente: ${winRate}%`,
+        detail: `Estás cerrando más de la mitad de tus deals. Seguí haciendo lo que funciona.`,
+        action: `Podrías estar siendo muy selectivo. Probá escalar: más volumen de prospectos.`,
+      })
+    }
+
+    // 8. Setter variance
+    const setterArr = Object.entries(setterStats)
+      .filter(([, s]) => s.wins + s.losses >= 3)
+      .map(([, s]) => { const total = s.wins + s.losses; return { ...s, rate: Math.round((s.wins / total) * 100) } })
+    if (setterArr.length >= 2) {
+      const best = setterArr.sort((a, b) => b.rate - a.rate)[0]
+      const worst = setterArr[setterArr.length - 1]
+      if (best.rate - worst.rate > 25) {
+        insights.push({
+          type: "info",
+          icon: "👥",
+          title: `${best.name.split(" ")[0]} cierra al ${best.rate}%, ${worst.name.split(" ")[0]} al ${worst.rate}%`,
+          detail: `Hay ${best.rate - worst.rate}% de diferencia entre tu mejor y peor setter.`,
+          action: `Que ${best.name.split(" ")[0]} grabe sus 3 mejores llamadas para que ${worst.name.split(" ")[0]} estudie.`,
+        })
+      }
+    }
+
+    // Sort: danger first, then warning, info, success
+    const priority = { danger: 0, warning: 1, info: 2, success: 3 }
+    insights.sort((a, b) => priority[a.type] - priority[b.type])
+
     return NextResponse.json({
       summary: {
         totalDeals: prospects.length,
@@ -158,6 +314,7 @@ export async function GET() {
         avgDaysToClose,
         totalRevenue,
       },
+      insights: insights.slice(0, 6),
       sourceStats: Object.entries(sourceStats).map(([source, s]) => ({
         source,
         ...s,

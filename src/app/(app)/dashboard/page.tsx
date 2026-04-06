@@ -4,6 +4,11 @@ import { parseAIScore, getScoreColor, getScoreEmoji } from "@/lib/parseAIScore"
 import AutopilotPanel from "@/components/AutopilotPanel"
 import PatternsEngine from "@/components/PatternsEngine"
 import TimingEngine from "@/components/TimingEngine"
+import ActivityFeed from "@/components/ActivityFeed"
+import WinLossReport from "@/components/WinLossReport"
+import SmartInbox from "@/components/SmartInbox"
+import ObjectionLibrary from "@/components/ObjectionLibrary"
+import CoachAI from "@/components/CoachAI"
 
 export default async function DashboardPage() {
   try {
@@ -145,6 +150,21 @@ export default async function DashboardPage() {
 
         {/* Timing Inteligente */}
         <TimingEngine />
+
+        {/* Feed de Actividad en Vivo */}
+        <ActivityFeed />
+
+        {/* Reporte Win/Loss */}
+        <WinLossReport />
+
+        {/* Inbox Inteligente */}
+        <SmartInbox />
+
+        {/* Biblioteca de Objeciones */}
+        <ObjectionLibrary />
+
+        {/* Coach AI del Equipo */}
+        <CoachAI />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-6 gap-4 mb-6 stagger">

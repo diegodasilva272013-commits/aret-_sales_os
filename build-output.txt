@@ -8,13 +8,13 @@
   Creating an optimized production build ...
 Ô£ô Compiled successfully in 2.4min
   Skipping validation of types
-  Finished TypeScript config validation in 811ms ...
+  Finished TypeScript config validation in 661ms ...
   Collecting page data using 7 workers ...
-  Generating static pages using 7 workers (0/95) ...
-  Generating static pages using 7 workers (23/95) 
-  Generating static pages using 7 workers (47/95) 
-  Generating static pages using 7 workers (71/95) 
-Ô£ô Generating static pages using 7 workers (95/95) in 5.5s
+  Generating static pages using 7 workers (0/114) ...
+  Generating static pages using 7 workers (28/114) 
+  Generating static pages using 7 workers (56/114) 
+  Generating static pages using 7 workers (85/114) 
+Ô£ô Generating static pages using 7 workers (114/114) in 5.7s
   Finalizing page optimization ...
 
 Route (app)
@@ -48,6 +48,22 @@ Route (app)
 Ôö£ ãÆ /api/closer-metrics/[id]
 Ôö£ ãÆ /api/closer-metrics/summary
 Ôö£ ãÆ /api/coach
+Ôö£ ãÆ /api/director/analytics
+Ôö£ ãÆ /api/director/comisiones
+Ôö£ ãÆ /api/director/equipo
+Ôö£ ãÆ /api/director/equipo/[id]
+Ôö£ ãÆ /api/director/equipo/[id]/pagos
+Ôö£ ãÆ /api/director/facturacion/dashboard
+Ôö£ ãÆ /api/director/facturacion/metas
+Ôö£ ãÆ /api/director/facturacion/reglas
+Ôö£ ãÆ /api/director/facturacion/transacciones
+Ôö£ ãÆ /api/director/proyectos
+Ôö£ ãÆ /api/director/proyectos/[id]
+Ôö£ ãÆ /api/director/proyectos/[id]/comisiones
+Ôö£ ãÆ /api/director/proyectos/[id]/miembros
+Ôö£ ãÆ /api/director/reportes/[tipo]/[reporteId]
+Ôö£ ãÆ /api/director/stats
+Ôö£ ãÆ /api/director/tareas
 Ôö£ ãÆ /api/inbox
 Ôö£ ãÆ /api/notes/transcribe
 Ôö£ ãÆ /api/notifications
@@ -97,6 +113,15 @@ Route (app)
 Ôö£ ãÆ /calls
 Ôö£ ãÆ /closer/metrics
 Ôö£ ãÆ /dashboard
+Ôö£ ãÆ /director
+Ôö£ ãÆ /director/agenda
+Ôö£ ãÆ /director/analytics
+Ôö£ ãÆ /director/clientes
+Ôö£ ãÆ /director/comisiones
+Ôö£ ãÆ /director/equipo
+Ôö£ ãÆ /director/facturacion
+Ôö£ ãÆ /director/proyectos
+Ôö£ ãÆ /director/transacciones
 Ôö£ ãÆ /export/businesses
 Ôö£ ãÆ /export/closer-metrics
 Ôö£ ãÆ /export/prospects

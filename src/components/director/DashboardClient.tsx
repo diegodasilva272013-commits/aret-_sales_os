@@ -22,8 +22,8 @@ interface DashboardData {
   closers: any[]
   cash: any[]
   motivos: any[]
-  embudo: any[]
-  reportesHoy: any[]
+  embudo: { leads: number; citas: number; shows: number; ventas: number; leadToVenta: number; citaToShow: number; showToCierre: number }
+  reportesHoy: { setters: any[]; closers: any[] }
   reunionStats: any
 }
 
@@ -63,8 +63,8 @@ export default function DashboardClient() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const comisionesData = [
-    ...(data?.setters || []).map((s: any) => ({ miembro: s.nombre, foto_url: s.foto_url, rol: 'setter', total: s.citas_calificadas * 25, desglose: [] })),
-    ...(data?.closers || []).map((c: any) => ({ miembro: c.nombre, foto_url: c.foto_url, rol: 'closer', total: Number(c.monto_cobrado || 0) * 0.08, desglose: [] })),
+    ...(data?.setters || []).map((s: any) => ({ miembro: s.nombre, rol: 'setter', total: (s.calificadas || 0) * 25, desglose: [] })),
+    ...(data?.closers || []).map((c: any) => ({ miembro: c.nombre, rol: 'closer', total: Number(c.cobrado || 0) * 0.08, desglose: [] })),
   ]
 
   const chartTooltipStyle = {
@@ -150,23 +150,28 @@ export default function DashboardClient() {
       )}
 
       {/* Embudo */}
-      {data && <EmbudoTable data={data.embudo} />}
+      {data && <EmbudoTable data={[
+        { etapa: 'Leads Nuevos', valor: data.embudo?.leads || 0, color: 'var(--info)' },
+        { etapa: 'Citas Agendadas', valor: data.embudo?.citas || 0, color: 'var(--accent)' },
+        { etapa: 'Citas Show', valor: data.embudo?.shows || 0, color: '#818CF8' },
+        { etapa: 'Ventas', valor: data.embudo?.ventas || 0, color: 'var(--success)' },
+      ]} />}
 
       {/* Tables Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <SettersTable
           setters={(data?.setters || []).map(s => ({
-            id: s.id, nombre: s.nombre, foto_url: s.foto_url,
-            leads_nuevos: s.leads_nuevos || 0, citas_agendadas: s.citas_agendadas || 0,
-            citas_show: s.citas_show || 0, citas_calificadas: s.citas_calificadas || 0,
-            tasa_show: s.tasa_show || 0,
+            id: s.id, nombre: s.nombre,
+            leads_nuevos: s.leads || 0, citas_agendadas: s.agendadas || 0,
+            citas_show: s.show || 0, citas_calificadas: s.calificadas || 0,
+            tasa_show: s.agendadas > 0 ? Math.round((s.show / s.agendadas) * 100) : 0,
           }))}
         />
         <ClosersTable
           closers={(data?.closers || []).map(c => ({
-            id: c.id, nombre: c.nombre, foto_url: c.foto_url,
-            shows: c.shows || 0, ventas_cerradas: c.ventas_cerradas || 0,
-            tasa_cierre: c.tasa_cierre || 0, monto_cobrado: c.monto_cobrado || 0,
+            id: c.id, nombre: c.nombre,
+            shows: c.show || 0, ventas_cerradas: c.ventas || 0,
+            tasa_cierre: c.tasaCierre || 0, monto_cobrado: c.cobrado || 0,
           }))}
         />
       </div>
@@ -175,7 +180,10 @@ export default function DashboardClient() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
         <CashTable data={data?.cash || []} />
         <MotivosTable data={data?.motivos || []} />
-        <ReportesHoy data={data?.reportesHoy || []} />
+        <ReportesHoy data={[
+          ...(data?.reportesHoy?.setters || []).map((s: any) => ({ nombre: s.nombre, rol: 'setter', envio: s.enviado })),
+          ...(data?.reportesHoy?.closers || []).map((c: any) => ({ nombre: c.nombre, rol: 'closer', envio: c.enviado })),
+        ]} />
       </div>
 
       {/* Comisiones */}

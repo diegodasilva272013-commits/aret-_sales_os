@@ -41,7 +41,7 @@ export async function GET() {
     }
   })
 
-  return NextResponse.json({ profiles: enriched })
+  return NextResponse.json(enriched)
 }
 
 export async function POST(req: NextRequest) {

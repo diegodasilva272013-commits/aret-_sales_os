@@ -6,15 +6,15 @@
 - Environments: .env.local
 
   Creating an optimized production build ...
-Ô£ô Compiled successfully in 2.4min
+Ô£ô Compiled successfully in 4.6min
   Skipping validation of types
-  Finished TypeScript config validation in 661ms ...
+  Finished TypeScript config validation in 719ms ...
   Collecting page data using 7 workers ...
-  Generating static pages using 7 workers (0/114) ...
-  Generating static pages using 7 workers (28/114) 
-  Generating static pages using 7 workers (56/114) 
-  Generating static pages using 7 workers (85/114) 
-Ô£ô Generating static pages using 7 workers (114/114) in 5.7s
+  Generating static pages using 7 workers (0/125) ...
+  Generating static pages using 7 workers (31/125) 
+  Generating static pages using 7 workers (62/125) 
+  Generating static pages using 7 workers (93/125) 
+Ô£ô Generating static pages using 7 workers (125/125) in 12.1s
   Finalizing page optimization ...
 
 Route (app)
@@ -49,6 +49,7 @@ Route (app)
 Ôö£ ãÆ /api/closer-metrics/summary
 Ôö£ ãÆ /api/coach
 Ôö£ ãÆ /api/director/analytics
+Ôö£ ãÆ /api/director/audio-notas
 Ôö£ ãÆ /api/director/comisiones
 Ôö£ ãÆ /api/director/equipo
 Ôö£ ãÆ /api/director/equipo/[id]
@@ -57,6 +58,9 @@ Route (app)
 Ôö£ ãÆ /api/director/facturacion/metas
 Ôö£ ãÆ /api/director/facturacion/reglas
 Ôö£ ãÆ /api/director/facturacion/transacciones
+Ôö£ ãÆ /api/director/perfil
+Ôö£ ãÆ /api/director/perfil/avatar
+Ôö£ ãÆ /api/director/perfil/password
 Ôö£ ãÆ /api/director/proyectos
 Ôö£ ãÆ /api/director/proyectos/[id]
 Ôö£ ãÆ /api/director/proyectos/[id]/comisiones
@@ -64,6 +68,7 @@ Route (app)
 Ôö£ ãÆ /api/director/reportes/[tipo]/[reporteId]
 Ôö£ ãÆ /api/director/stats
 Ôö£ ãÆ /api/director/tareas
+Ôö£ ãÆ /api/director/webhook/meta
 Ôö£ ãÆ /api/inbox
 Ôö£ ãÆ /api/notes/transcribe
 Ôö£ ãÆ /api/notifications
@@ -114,18 +119,24 @@ Route (app)
 Ôö£ ãÆ /closer/metrics
 Ôö£ ãÆ /dashboard
 Ôö£ ãÆ /director
+Ôö£ ãÆ /director/admin
 Ôö£ ãÆ /director/agenda
 Ôö£ ãÆ /director/analytics
 Ôö£ ãÆ /director/clientes
 Ôö£ ãÆ /director/comisiones
 Ôö£ ãÆ /director/equipo
 Ôö£ ãÆ /director/facturacion
+Ôö£ ãÆ /director/perfil
 Ôö£ ãÆ /director/proyectos
+Ôö£ ãÆ /director/socio
+Ôö£ ãÆ /director/trafico
 Ôö£ ãÆ /director/transacciones
 Ôö£ ãÆ /export/businesses
 Ôö£ ãÆ /export/closer-metrics
 Ôö£ ãÆ /export/prospects
 Ôö£ ãÆ /find
+Ôö£ Ôùï /form/closer
+Ôö£ Ôùï /form/setter
 Ôö£ ãÆ /join/[orgId]
 Ôö£ Ôùï /legal
 Ôö£ Ôùï /login

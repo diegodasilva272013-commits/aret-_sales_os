@@ -41,6 +41,7 @@ export async function proxy(request: NextRequest) {
     || request.nextUrl.pathname.startsWith("/api/video/composition")
     || request.nextUrl.pathname.startsWith("/api/video/upload")
     || request.nextUrl.pathname.startsWith("/api/stripe")
+    || request.nextUrl.pathname.startsWith("/api/director/webhook/meta")
 
   if (!user && !isAuthPage && !isPublicRoute && !isWebhook) {
     const url = request.nextUrl.clone()

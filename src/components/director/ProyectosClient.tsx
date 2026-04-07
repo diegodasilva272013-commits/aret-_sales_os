@@ -28,7 +28,8 @@ export default function ProyectosClient() {
     setLoading(true)
     const [pRes, eRes] = await Promise.all([fetch('/api/director/proyectos'), fetch('/api/director/equipo')])
     setProyectos(await pRes.json())
-    setEquipo(await eRes.json())
+    const eqJson = await eRes.json()
+    setEquipo(eqJson.profiles || [])
     setLoading(false)
   }, [])
 

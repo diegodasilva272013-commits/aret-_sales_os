@@ -32,7 +32,8 @@ export default function EquipoClient() {
       fetch('/api/director/equipo'),
       fetch('/api/director/proyectos'),
     ])
-    setMembers(await mRes.json())
+    const eJson = await mRes.json()
+    setMembers(eJson.profiles || [])
     setProyectos(await pRes.json())
     setLoading(false)
   }, [])

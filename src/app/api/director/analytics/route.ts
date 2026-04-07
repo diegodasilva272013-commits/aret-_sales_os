@@ -166,7 +166,9 @@ export async function GET(req: NextRequest) {
     porProyecto,
     distribucionPagos,
     motivosNoCierre,
-    setterEvolucion: { data: setterEvo.data, names: setterEvo.names },
-    closerEvolucion: { data: closerEvo.data, names: closerEvo.names },
+    setterEvolucion: setterEvo.data,
+    setterNombres: setterEvo.names,
+    closerEvolucion: closerEvo.data,
+    closerNombres: closerEvo.names,
   })
 }

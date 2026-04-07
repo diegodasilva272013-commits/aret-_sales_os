@@ -48,7 +48,8 @@ export default function AgendaClient() {
       fetch('/api/director/equipo'),
     ])
     setTareas(await tRes.json())
-    setEquipo(await eRes.json())
+    const eqJson = await eRes.json()
+    setEquipo(eqJson.profiles || [])
     setLoading(false)
   }, [])
 

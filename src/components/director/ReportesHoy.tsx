@@ -1,67 +1,95 @@
 'use client'
 
-import { CheckCircle, XCircle, Clock } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 
-interface MemberReport {
-  nombre: string
-  foto_url?: string
-  rol: string
-  envio: boolean
-  hora?: string
+interface ReportesHoyData {
+  setters: Array<{ id: string; nombre: string; enviado: boolean; asistio_reunion?: boolean | null; reporte_id?: string | null }>
+  closers: Array<{ id: string; nombre: string; enviado: boolean; asistio_reunion?: boolean | null; reporte_id?: string | null }>
 }
 
-interface ReportesHoyProps {
-  data: MemberReport[]
+interface Props {
+  data: ReportesHoyData
+  onEditReport?: (id: string, tipo: 'setter' | 'closer') => void
 }
 
-export default function ReportesHoy({ data }: ReportesHoyProps) {
-  const enviados = data.filter(d => d.envio).length
-  const total = data.length
+function getInitials(name: string) {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+}
+
+export default function ReportesHoy({ data, onEditReport }: Props) {
+  const totalSetters = data.setters.length
+  const enviadosSetters = data.setters.filter(s => s.enviado).length
+  const totalClosers = data.closers.length
+  const enviadosClosers = data.closers.filter(c => c.enviado).length
+  const total = totalSetters + totalClosers
+  const enviados = enviadosSetters + enviadosClosers
+  const pct = total > 0 ? Math.round((enviados / total) * 100) : 0
 
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Reportes Hoy</h3>
-        <span style={{ fontSize: 12, color: enviados === total ? 'var(--success)' : 'var(--warning)' }}>
-          {enviados}/{total} enviados
-        </span>
+    <div>
+      {/* Progress */}
+      <div className="mb-5">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-xs font-semibold" style={{ color: '#94A3B8' }}>{enviados}/{total} reportes</span>
+          <span className="text-xs font-mono font-bold" style={{ color: pct === 100 ? '#34D399' : '#FBBF24' }}>{pct}%</span>
+        </div>
+        <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#1a2234' }}>
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: pct === 100 ? '#34D399' : pct >= 50 ? '#FBBF24' : '#F87171' }} />
+        </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {data.map((m, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 16px', borderBottom: i < data.length - 1 ? '1px solid var(--border)' : 'none',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: 'var(--accent)', overflow: 'hidden' }}>
-                {m.foto_url ? <img src={m.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : m.nombre.charAt(0)}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        {/* Setters column */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: '#818CF8' }}>Setters ({enviadosSetters}/{totalSetters})</p>
+          <div className="space-y-1.5">
+            {data.setters.map(s => (
+              <div key={s.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg" style={{ background: s.enviado ? 'rgba(52,211,153,0.06)' : 'rgba(248,113,113,0.06)', border: `1px solid ${s.enviado ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)'}` }}>
+                <div className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0" style={{ background: 'rgba(99,102,241,0.15)', color: '#818CF8' }}>{getInitials(s.nombre)}</div>
+                <span className="flex-1 text-sm truncate" style={{ color: '#E2E8F0' }}>{s.nombre}</span>
+                {s.enviado ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base" title="Enviado">✓</span>
+                    {onEditReport && s.reporte_id && (
+                      <button onClick={() => onEditReport(s.reporte_id!, 'setter')} className="p-1 rounded hover:bg-white/5 transition-colors" title="Editar reporte">
+                        <Pencil size={11} style={{ color: '#475569' }} />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs font-medium" style={{ color: '#F87171' }}>Pendiente</span>
+                )}
               </div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{m.nombre}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{m.rol}</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {m.envio ? (
-                <>
-                  <CheckCircle size={14} style={{ color: 'var(--success)' }} />
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.hora}</span>
-                </>
-              ) : (
-                <>
-                  <Clock size={14} style={{ color: 'var(--warning)' }} />
-                  <span style={{ fontSize: 11, color: 'var(--warning)' }}>Pendiente</span>
-                </>
-              )}
-            </div>
+            ))}
+            {data.setters.length === 0 && <p className="text-xs" style={{ color: '#334155' }}>Sin setters</p>}
           </div>
-        ))}
-        {data.length === 0 && (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Sin miembros del equipo</div>
-        )}
+        </div>
+
+        {/* Closers column */}
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: '#34D399' }}>Closers ({enviadosClosers}/{totalClosers})</p>
+          <div className="space-y-1.5">
+            {data.closers.map(c => (
+              <div key={c.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg" style={{ background: c.enviado ? 'rgba(52,211,153,0.06)' : 'rgba(248,113,113,0.06)', border: `1px solid ${c.enviado ? 'rgba(52,211,153,0.15)' : 'rgba(248,113,113,0.15)'}` }}>
+                <div className="flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0" style={{ background: 'rgba(16,185,129,0.12)', color: '#34D399' }}>{getInitials(c.nombre)}</div>
+                <span className="flex-1 text-sm truncate" style={{ color: '#E2E8F0' }}>{c.nombre}</span>
+                {c.enviado ? (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base" title="Enviado">✓</span>
+                    {onEditReport && c.reporte_id && (
+                      <button onClick={() => onEditReport(c.reporte_id!, 'closer')} className="p-1 rounded hover:bg-white/5 transition-colors" title="Editar reporte">
+                        <Pencil size={11} style={{ color: '#475569' }} />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-xs font-medium" style={{ color: '#F87171' }}>Pendiente</span>
+                )}
+              </div>
+            ))}
+            {data.closers.length === 0 && <p className="text-xs" style={{ color: '#334155' }}>Sin closers</p>}
+          </div>
+        </div>
       </div>
     </div>
   )

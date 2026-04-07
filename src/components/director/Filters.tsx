@@ -1,86 +1,80 @@
 'use client'
 
-import { Calendar, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
-
 interface FiltersProps {
   desde: string
   hasta: string
-  onChange: (desde: string, hasta: string) => void
-  proyectos?: { id: string; nombre: string }[]
-  proyectoId?: string
-  onProyectoChange?: (id: string) => void
+  onDesdChange: (v: string) => void
+  onHastaChange: (v: string) => void
+  onApply: () => void
 }
 
-const quickPills = [
-  { label: 'Hoy', getValue: () => { const t = new Date().toISOString().split('T')[0]; return [t, t] } },
-  { label: 'Esta semana', getValue: () => { const d = new Date(); const day = d.getDay() || 7; d.setDate(d.getDate() - day + 1); return [d.toISOString().split('T')[0], new Date().toISOString().split('T')[0]] } },
-  { label: 'Este mes', getValue: () => { const d = new Date(); return [`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`, d.toISOString().split('T')[0]] } },
-  { label: 'Último mes', getValue: () => { const d = new Date(); d.setMonth(d.getMonth()-1); const start = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; const end = new Date(d.getFullYear(), d.getMonth()+1, 0).toISOString().split('T')[0]; return [start, end] } },
-]
+export default function Filters({ desde, hasta, onDesdChange, onHastaChange, onApply }: FiltersProps) {
+  function setQuick(days: number) {
+    const end = new Date()
+    const start = new Date()
+    start.setDate(end.getDate() - days + 1)
+    onDesdChange(start.toISOString().split('T')[0])
+    onHastaChange(end.toISOString().split('T')[0])
+  }
 
-export default function Filters({ desde, hasta, onChange, proyectos, proyectoId, onProyectoChange }: FiltersProps) {
-  const [active, setActive] = useState<number | null>(null)
+  const quickOptions = [
+    { label: 'Hoy', days: 1 },
+    { label: '7D', days: 7 },
+    { label: '30D', days: 30 },
+  ]
 
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      {quickPills.map((pill, i) => (
-        <button
-          key={i}
-          onClick={() => { const [d, h] = pill.getValue(); onChange(d, h); setActive(i) }}
-          style={{
-            padding: '6px 12px',
-            borderRadius: 8,
-            border: 'none',
-            background: active === i ? 'var(--accent)' : 'var(--surface-2)',
-            color: active === i ? '#fff' : 'var(--text-secondary)',
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: 'pointer',
-          }}
-        >
-          {pill.label}
-        </button>
-      ))}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 8 }}>
-        <Calendar size={14} style={{ color: 'var(--text-muted)' }} />
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Quick pills */}
+      <div className="flex items-center gap-1">
+        {quickOptions.map(({ label, days }) => (
+          <button
+            key={label}
+            onClick={() => { setQuick(days); setTimeout(onApply, 50) }}
+            className="px-2.5 py-1 text-xs rounded-lg font-medium transition-all duration-150"
+            style={{
+              background: 'rgba(99,102,241,0.08)',
+              border: '1px solid rgba(99,102,241,0.2)',
+              color: '#818CF8',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.18)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.08)' }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Divider */}
+      <div className="w-px h-4" style={{ background: '#1a2234' }} />
+
+      {/* Date range */}
+      <div className="flex items-center gap-1.5">
         <input
           type="date"
           value={desde}
-          onChange={(e) => { onChange(e.target.value, hasta); setActive(null) }}
-          style={{
-            padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)',
-            background: 'var(--surface-2)', color: 'var(--text-primary)', fontSize: 12,
-          }}
+          onChange={e => onDesdChange(e.target.value)}
+          className="rounded-lg px-2.5 py-1 text-xs transition-colors focus:outline-none"
+          style={{ background: '#0D1117', border: '1px solid #1a2234', color: '#94A3B8' }}
         />
-        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>→</span>
+        <span style={{ color: '#334155', fontSize: '0.8rem' }}>—</span>
         <input
           type="date"
           value={hasta}
-          onChange={(e) => { onChange(desde, e.target.value); setActive(null) }}
-          style={{
-            padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)',
-            background: 'var(--surface-2)', color: 'var(--text-primary)', fontSize: 12,
-          }}
+          onChange={e => onHastaChange(e.target.value)}
+          className="rounded-lg px-2.5 py-1 text-xs transition-colors focus:outline-none"
+          style={{ background: '#0D1117', border: '1px solid #1a2234', color: '#94A3B8' }}
         />
+        <button
+          onClick={onApply}
+          className="px-3 py-1.5 text-xs rounded-lg font-semibold transition-all duration-150"
+          style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818CF8' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.25)' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.15)' }}
+        >
+          Aplicar
+        </button>
       </div>
-      {proyectos && proyectos.length > 0 && (
-        <div style={{ position: 'relative', marginLeft: 8 }}>
-          <select
-            value={proyectoId || ''}
-            onChange={(e) => onProyectoChange?.(e.target.value)}
-            style={{
-              padding: '6px 24px 6px 10px', borderRadius: 8, border: '1px solid var(--border)',
-              background: 'var(--surface-2)', color: 'var(--text-primary)', fontSize: 12,
-              appearance: 'none', cursor: 'pointer',
-            }}
-          >
-            <option value="">Todos los proyectos</option>
-            {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-          </select>
-          <ChevronDown size={12} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-        </div>
-      )}
     </div>
   )
 }

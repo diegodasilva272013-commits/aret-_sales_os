@@ -1,114 +1,129 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronUp, ChevronDown, Edit2 } from 'lucide-react'
-import Badge from './Badge'
+import Badge from '@/components/director/Badge'
+import { ChevronUp, ChevronDown } from 'lucide-react'
 
-interface Setter {
+interface SetterRow {
   id: string
   nombre: string
-  foto_url?: string
+  leads_recibidos: number
+  intentos_contacto: number
+  contactados: number
   citas_agendadas: number
   citas_show: number
+  citas_noshow: number
   citas_calificadas: number
-  leads_nuevos: number
-  tasa_show: number
-  badge?: string
+  citas_reprogramadas: number
+  mensajes_enviados?: number
+  respuestas_obtenidas?: number
+  asistio_reunion?: boolean | null
 }
 
-interface SettersTableProps {
-  setters: Setter[]
-  onEdit?: (setterId: string, reporteId?: string) => void
+function getSetterStatus(row: SetterRow) {
+  const showRate = row.citas_agendadas > 0 ? row.citas_show / row.citas_agendadas : 0
+  const convRate = row.leads_recibidos > 0 ? row.citas_agendadas / row.leads_recibidos : 0
+  if (showRate >= 0.7 && convRate >= 0.3) return { variant: 'top' as const, label: 'Top' }
+  if (showRate >= 0.5 && convRate >= 0.2) return { variant: 'bueno' as const, label: 'Bueno' }
+  if (showRate >= 0.3) return { variant: 'revisar' as const, label: 'Revisar' }
+  return { variant: 'coaching' as const, label: 'Coaching' }
 }
 
-type SortKey = 'nombre' | 'leads_nuevos' | 'citas_agendadas' | 'citas_show' | 'citas_calificadas' | 'tasa_show'
+function getInitials(name: string) {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+}
 
-export default function SettersTable({ setters, onEdit }: SettersTableProps) {
-  const [sortKey, setSortKey] = useState<SortKey>('citas_calificadas')
-  const [sortAsc, setSortAsc] = useState(false)
+type SortKey = keyof SetterRow
+type SortDir = 'asc' | 'desc'
 
-  const sorted = [...setters].sort((a, b) => {
+export default function SettersTable({ data }: { data: SetterRow[] }) {
+  const [sortKey, setSortKey] = useState<SortKey>('citas_agendadas')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('desc') }
+  }
+
+  const sorted = [...data].sort((a, b) => {
     const av = a[sortKey], bv = b[sortKey]
-    if (typeof av === 'string') return sortAsc ? (av as string).localeCompare(bv as string) : (bv as string).localeCompare(av as string)
-    return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number)
+    if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av)
+    return sortDir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number)
   })
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortAsc(!sortAsc)
-    else { setSortKey(key); setSortAsc(false) }
-  }
+  const showMensajes = data.some(r => (r.mensajes_enviados ?? 0) > 0)
+  const showRespuestas = data.some(r => (r.respuestas_obtenidas ?? 0) > 0)
+  const showReunion = data.some(r => r.asistio_reunion !== undefined && r.asistio_reunion !== null)
 
-  const SortIcon = ({ k }: { k: SortKey }) => {
-    if (sortKey !== k) return null
-    return sortAsc ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-  }
+  const cols: { key: SortKey; label: string }[] = [
+    { key: 'nombre', label: 'Setter' },
+    { key: 'leads_recibidos', label: 'Leads' },
+    { key: 'intentos_contacto', label: 'Intentos' },
+    { key: 'contactados', label: 'Contactados' },
+    { key: 'citas_agendadas', label: 'Agendadas' },
+    { key: 'citas_show', label: 'Show' },
+    { key: 'citas_noshow', label: 'No Show' },
+    { key: 'citas_calificadas', label: 'Calificadas' },
+  ]
 
-  const th = (label: string, key: SortKey) => (
-    <th
-      onClick={() => toggleSort(key)}
-      style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', cursor: 'pointer', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: 0.5, userSelect: 'none' }}
-    >
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{label}<SortIcon k={key} /></span>
-    </th>
-  )
-
-  function getBadge(s: Setter): 'top' | 'bueno' | 'revisar' | 'coaching' {
-    if (s.tasa_show >= 70 && s.citas_calificadas >= 5) return 'top'
-    if (s.tasa_show >= 50) return 'bueno'
-    if (s.tasa_show >= 30) return 'revisar'
-    return 'coaching'
-  }
+  if (data.length === 0) return <p className="text-center py-8 text-sm" style={{ color: '#334155' }}>Sin datos en el rango seleccionado</p>
 
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
-        <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Setters</h3>
-      </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              {th('Setter', 'nombre')}
-              {th('Leads', 'leads_nuevos')}
-              {th('Agendadas', 'citas_agendadas')}
-              {th('Show', 'citas_show')}
-              {th('Calificadas', 'citas_calificadas')}
-              {th('Tasa Show', 'tasa_show')}
-              <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(s => (
-              <tr key={s.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: 'var(--accent)', overflow: 'hidden' }}>
-                      {s.foto_url ? <img src={s.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : s.nombre.charAt(0)}
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{s.nombre}</span>
-                    <Badge tipo={getBadge(s)} />
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr style={{ borderBottom: '1px solid #1a2234' }}>
+            {cols.map(col => (
+              <th key={col.key} onClick={() => handleSort(col.key)} className="text-left px-4 py-3 cursor-pointer select-none whitespace-nowrap transition-colors" style={{ color: sortKey === col.key ? '#6366F1' : '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <div className="flex items-center gap-1">
+                  {col.label}
+                  {sortKey === col.key ? (sortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <ChevronDown size={11} style={{ opacity: 0.2 }} />}
+                </div>
+              </th>
+            ))}
+            {showMensajes && <th className="text-left px-4 py-3 whitespace-nowrap" style={{ color: '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Mensajes</th>}
+            {showRespuestas && <th className="text-left px-4 py-3 whitespace-nowrap" style={{ color: '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Respuestas</th>}
+            {showReunion && <th className="text-left px-4 py-3 whitespace-nowrap" style={{ color: '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Reunión</th>}
+            <th className="text-left px-4 py-3 whitespace-nowrap" style={{ color: '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((row, i) => {
+            const status = getSetterStatus(row)
+            const showRate = row.citas_agendadas > 0 ? Math.round((row.citas_show / row.citas_agendadas) * 100) : 0
+            return (
+              <tr key={row.id} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.008)', borderBottom: '1px solid rgba(26,34,52,0.6)' }} className="transition-colors hover:bg-white/[0.015]">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0" style={{ background: 'rgba(99,102,241,0.15)', color: '#818CF8' }}>{getInitials(row.nombre)}</div>
+                    <span className="font-medium" style={{ color: '#F1F5F9' }}>{row.nombre}</span>
                   </div>
                 </td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>{s.leads_nuevos}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>{s.citas_agendadas}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>{s.citas_show}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.citas_calificadas}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, color: s.tasa_show >= 50 ? 'var(--success)' : 'var(--warning)' }}>{s.tasa_show}%</td>
-                <td style={{ padding: '10px 12px' }}>
-                  {onEdit && (
-                    <button onClick={() => onEdit(s.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
-                      <Edit2 size={14} />
-                    </button>
-                  )}
+                <td className="px-4 py-3 font-mono" style={{ color: '#94A3B8' }}>{row.leads_recibidos}</td>
+                <td className="px-4 py-3 font-mono" style={{ color: '#64748B' }}>{row.intentos_contacto}</td>
+                <td className="px-4 py-3 font-mono" style={{ color: '#94A3B8' }}>{row.contactados}</td>
+                <td className="px-4 py-3 font-mono font-semibold" style={{ color: '#818CF8' }}>{row.citas_agendadas}</td>
+                <td className="px-4 py-3 font-mono font-semibold" style={{ color: '#34D399' }}>{row.citas_show}</td>
+                <td className="px-4 py-3 font-mono" style={{ color: '#F87171' }}>{row.citas_noshow}</td>
+                <td className="px-4 py-3 font-mono font-semibold" style={{ color: '#A78BFA' }}>{row.citas_calificadas}</td>
+                {showMensajes && <td className="px-4 py-3 font-mono" style={{ color: '#A78BFA' }}>{row.mensajes_enviados ?? 0}</td>}
+                {showRespuestas && <td className="px-4 py-3 font-mono" style={{ color: '#818CF8' }}>{row.respuestas_obtenidas ?? 0}</td>}
+                {showReunion && (
+                  <td className="px-4 py-3">
+                    {row.asistio_reunion === null || row.asistio_reunion === undefined ? <span style={{ color: '#334155' }}>—</span> : row.asistio_reunion ? <span className="text-base" title="Asistió">✓</span> : <span className="text-base" title="No asistió" style={{ color: '#F87171' }}>✗</span>}
+                  </td>
+                )}
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-1">
+                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <span className="text-xs" style={{ color: '#334155' }}>Show: {showRate}%</span>
+                  </div>
                 </td>
               </tr>
-            ))}
-            {sorted.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Sin datos de setters para este período</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

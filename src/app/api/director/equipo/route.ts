@@ -32,16 +32,22 @@ export async function GET() {
     return {
       id: p.id,
       nombre: p.full_name || "",
+      full_name: p.full_name || "",
+      email: (p as Record<string, unknown>).email || "",
       telefono: p.phone || null,
+      phone: p.phone || null,
       foto_url: p.avatar_url || null,
+      avatar_url: p.avatar_url || null,
       rol: p.role || "setter",
+      role: p.role || "setter",
       activo: p.is_active !== false,
+      is_active: p.is_active !== false,
       pagos: userPagos.map(pg => ({ id: pg.id, tipo: pg.tipo, datos: pg.datos, titular: pg.titular, principal: pg.principal })),
       proyectos: userProyectos,
     }
   })
 
-  return NextResponse.json(enriched)
+  return NextResponse.json({ profiles: enriched })
 }
 
 export async function POST(req: NextRequest) {

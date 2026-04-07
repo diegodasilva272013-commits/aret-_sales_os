@@ -1,111 +1,136 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronUp, ChevronDown, Edit2 } from 'lucide-react'
-import Badge from './Badge'
+import Badge from '@/components/director/Badge'
+import { formatCurrency } from '@/lib/utils'
+import { ChevronUp, ChevronDown } from 'lucide-react'
 
-interface Closer {
+interface CloserRow {
   id: string
   nombre: string
-  foto_url?: string
-  shows: number
+  citas_recibidas: number
+  citas_show: number
+  citas_noshow: number
   ventas_cerradas: number
-  tasa_cierre: number
+  ventas_no_cerradas: number
+  monto_total_cerrado: number
   monto_cobrado: number
-  badge?: string
+  monto_pendiente: number
+  pagos_completos: number
+  pagos_parciales: number
+  pagos_nulo: number
+  propuestas_enviadas?: number
+  seguimientos_realizados?: number
+  asistio_reunion?: boolean | null
+  motivo_precio: number
+  motivo_consultar: number
+  motivo_momento: number
+  motivo_competencia: number
+  motivo_otro: number
 }
 
-interface ClosersTableProps {
-  closers: Closer[]
-  onEdit?: (closerId: string, reporteId?: string) => void
+function getCloserStatus(row: CloserRow) {
+  const cierre = row.citas_show > 0 ? row.ventas_cerradas / row.citas_show : 0
+  const cobro = row.monto_total_cerrado > 0 ? row.monto_cobrado / row.monto_total_cerrado : 0
+  if (cierre >= 0.4 && cobro >= 0.7) return { variant: 'top' as const, label: 'Top' }
+  if (cierre >= 0.25 && cobro >= 0.5) return { variant: 'bueno' as const, label: 'Bueno' }
+  if (cierre >= 0.15) return { variant: 'revisar' as const, label: 'Revisar' }
+  return { variant: 'coaching' as const, label: 'Coaching' }
 }
 
-type SortKey = 'nombre' | 'shows' | 'ventas_cerradas' | 'tasa_cierre' | 'monto_cobrado'
+function getInitials(name: string) {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+}
 
-export default function ClosersTable({ closers, onEdit }: ClosersTableProps) {
-  const [sortKey, setSortKey] = useState<SortKey>('monto_cobrado')
-  const [sortAsc, setSortAsc] = useState(false)
+type SortKey = keyof CloserRow
+type SortDir = 'asc' | 'desc'
 
-  const sorted = [...closers].sort((a, b) => {
+export default function ClosersTable({ data }: { data: CloserRow[] }) {
+  const [sortKey, setSortKey] = useState<SortKey>('ventas_cerradas')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('desc') }
+  }
+
+  const sorted = [...data].sort((a, b) => {
     const av = a[sortKey], bv = b[sortKey]
-    if (typeof av === 'string') return sortAsc ? (av as string).localeCompare(bv as string) : (bv as string).localeCompare(av as string)
-    return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number)
+    if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv as string) : (bv as string).localeCompare(av)
+    return sortDir === 'asc' ? (av as number) - (bv as number) : (bv as number) - (av as number)
   })
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortAsc(!sortAsc)
-    else { setSortKey(key); setSortAsc(false) }
-  }
+  const showPropuestas = data.some(r => (r.propuestas_enviadas ?? 0) > 0)
+  const showSeguimientos = data.some(r => (r.seguimientos_realizados ?? 0) > 0)
+  const showReunion = data.some(r => r.asistio_reunion !== undefined && r.asistio_reunion !== null)
 
-  const SortIcon = ({ k }: { k: SortKey }) => {
-    if (sortKey !== k) return null
-    return sortAsc ? <ChevronUp size={12} /> : <ChevronDown size={12} />
-  }
+  const cols: { key: SortKey; label: string }[] = [
+    { key: 'nombre', label: 'Closer' },
+    { key: 'citas_recibidas', label: 'Recibidas' },
+    { key: 'citas_show', label: 'Show' },
+    { key: 'ventas_cerradas', label: 'Ventas' },
+    { key: 'monto_total_cerrado', label: 'Cerrado' },
+    { key: 'monto_cobrado', label: 'Cobrado' },
+    { key: 'monto_pendiente', label: 'Pendiente' },
+  ]
 
-  const th = (label: string, key: SortKey) => (
-    <th
-      onClick={() => toggleSort(key)}
-      style={{ padding: '10px 12px', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', cursor: 'pointer', borderBottom: '1px solid var(--border)', textTransform: 'uppercase', letterSpacing: 0.5, userSelect: 'none' }}
-    >
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{label}<SortIcon k={key} /></span>
-    </th>
-  )
-
-  function getBadge(c: Closer): 'top' | 'bueno' | 'revisar' | 'coaching' {
-    if (c.tasa_cierre >= 40 && c.ventas_cerradas >= 5) return 'top'
-    if (c.tasa_cierre >= 25) return 'bueno'
-    if (c.tasa_cierre >= 15) return 'revisar'
-    return 'coaching'
-  }
+  if (data.length === 0) return <p className="text-center py-8 text-sm" style={{ color: '#334155' }}>Sin datos en el rango seleccionado</p>
 
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)' }}>
-        <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Closers</h3>
-      </div>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              {th('Closer', 'nombre')}
-              {th('Shows', 'shows')}
-              {th('Ventas', 'ventas_cerradas')}
-              {th('Tasa Cierre', 'tasa_cierre')}
-              {th('Cobrado', 'monto_cobrado')}
-              <th style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)' }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map(c => (
-              <tr key={c.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-glow)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600, color: 'var(--accent)', overflow: 'hidden' }}>
-                      {c.foto_url ? <img src={c.foto_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : c.nombre.charAt(0)}
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{c.nombre}</span>
-                    <Badge tipo={getBadge(c)} />
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr style={{ borderBottom: '1px solid #1a2234' }}>
+            {cols.map(col => (
+              <th key={col.key} onClick={() => handleSort(col.key)} className="text-left px-4 py-3 cursor-pointer select-none whitespace-nowrap transition-colors" style={{ color: sortKey === col.key ? '#6366F1' : '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                <div className="flex items-center gap-1">
+                  {col.label}
+                  {sortKey === col.key ? (sortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <ChevronDown size={11} style={{ opacity: 0.2 }} />}
+                </div>
+              </th>
+            ))}
+            {showPropuestas && <th className="text-left px-4 py-3 whitespace-nowrap" style={{ color: '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Propuestas</th>}
+            {showSeguimientos && <th className="text-left px-4 py-3 whitespace-nowrap" style={{ color: '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Seguim.</th>}
+            {showReunion && <th className="text-left px-4 py-3 whitespace-nowrap" style={{ color: '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Reunión</th>}
+            <th className="text-left px-4 py-3 whitespace-nowrap" style={{ color: '#475569', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((row, i) => {
+            const status = getCloserStatus(row)
+            const cierre = row.citas_show > 0 ? Math.round((row.ventas_cerradas / row.citas_show) * 100) : 0
+            return (
+              <tr key={row.id} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.008)', borderBottom: '1px solid rgba(26,34,52,0.6)' }} className="transition-colors hover:bg-white/[0.015]">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0" style={{ background: 'rgba(16,185,129,0.12)', color: '#34D399' }}>{getInitials(row.nombre)}</div>
+                    <span className="font-medium" style={{ color: '#F1F5F9' }}>{row.nombre}</span>
                   </div>
                 </td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: 'var(--text-secondary)' }}>{c.shows}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{c.ventas_cerradas}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, color: c.tasa_cierre >= 30 ? 'var(--success)' : 'var(--warning)' }}>{c.tasa_cierre}%</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 600, color: 'var(--success)' }}>${c.monto_cobrado.toLocaleString()}</td>
-                <td style={{ padding: '10px 12px' }}>
-                  {onEdit && (
-                    <button onClick={() => onEdit(c.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4 }}>
-                      <Edit2 size={14} />
-                    </button>
-                  )}
+                <td className="px-4 py-3 font-mono" style={{ color: '#94A3B8' }}>{row.citas_recibidas}</td>
+                <td className="px-4 py-3 font-mono font-semibold" style={{ color: '#34D399' }}>{row.citas_show}</td>
+                <td className="px-4 py-3 font-mono font-semibold" style={{ color: '#818CF8' }}>{row.ventas_cerradas}</td>
+                <td className="px-4 py-3 font-mono font-semibold" style={{ color: '#34D399' }}>{formatCurrency(row.monto_total_cerrado)}</td>
+                <td className="px-4 py-3 font-mono font-semibold" style={{ color: '#34D399' }}>{formatCurrency(row.monto_cobrado)}</td>
+                <td className="px-4 py-3 font-mono" style={{ color: row.monto_pendiente > 0 ? '#FBBF24' : '#334155' }}>{formatCurrency(row.monto_pendiente)}</td>
+                {showPropuestas && <td className="px-4 py-3 font-mono" style={{ color: '#A78BFA' }}>{row.propuestas_enviadas ?? 0}</td>}
+                {showSeguimientos && <td className="px-4 py-3 font-mono" style={{ color: '#818CF8' }}>{row.seguimientos_realizados ?? 0}</td>}
+                {showReunion && (
+                  <td className="px-4 py-3">
+                    {row.asistio_reunion === null || row.asistio_reunion === undefined ? <span style={{ color: '#334155' }}>—</span> : row.asistio_reunion ? <span className="text-base" title="Asistió">✓</span> : <span className="text-base" title="No asistió" style={{ color: '#F87171' }}>✗</span>}
+                  </td>
+                )}
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-1">
+                    <Badge variant={status.variant}>{status.label}</Badge>
+                    <span className="text-xs" style={{ color: '#334155' }}>Cierre: {cierre}%</span>
+                  </div>
                 </td>
               </tr>
-            ))}
-            {sorted.length === 0 && (
-              <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Sin datos de closers para este período</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }

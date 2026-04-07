@@ -57,6 +57,12 @@ const initialData: SetterData = {
   tipo_proyecto: 'evergreen',
 }
 
+interface Props {
+  userId?: string
+  nombre?: string
+  existingReport?: SetterData | null
+}
+
 interface ProyectoOption {
   id: string
   nombre: string
@@ -77,62 +83,83 @@ function BigNumberInput({ value, onChange }: { value: number; onChange: (v: numb
   )
 }
 
-function StepContent({ title, question, hint, children }: { title: string; question: string; hint?: string; children?: React.ReactNode }) {
-  return (
-    <div>
-      <div className="mb-2">
-        <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider">{title}</span>
-      </div>
-      <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 leading-tight">{question}</h2>
-      {hint && <p className="text-gray-500 text-sm mb-2">{hint}</p>}
-      {children}
-    </div>
-  )
-}
-
 function ReunionStep({
-  value, nota, onValue, onNota, onNoMeeting,
+  value,
+  nota,
+  onValue,
+  onNota,
+  onNoMeeting,
 }: {
-  value: boolean | null; nota: string; onValue: (v: boolean) => void; onNota: (v: string) => void; onNoMeeting: () => void
+  value: boolean | null
+  nota: string
+  onValue: (v: boolean) => void
+  onNota: (v: string) => void
+  onNoMeeting: () => void
 }) {
   const isNoMeeting = value === null && nota === 'sin_reunion'
   return (
     <div className="mt-6 space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        <button type="button" onClick={() => onValue(true)}
+        <button
+          type="button"
+          onClick={() => onValue(true)}
           className="w-full py-6 rounded-2xl font-bold text-xl transition-all"
-          style={{ background: value === true ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.06)', border: `2px solid ${value === true ? '#10B981' : 'rgba(16,185,129,0.2)'}`, color: value === true ? '#34D399' : '#475569' }}>
+          style={{
+            background: value === true ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.06)',
+            border: `2px solid ${value === true ? '#10B981' : 'rgba(16,185,129,0.2)'}`,
+            color: value === true ? '#34D399' : '#475569',
+          }}
+        >
           ✅ Sí
         </button>
-        <button type="button" onClick={() => onValue(false)}
+        <button
+          type="button"
+          onClick={() => onValue(false)}
           className="w-full py-6 rounded-2xl font-bold text-xl transition-all"
-          style={{ background: value === false ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.04)', border: `2px solid ${value === false ? '#EF4444' : 'rgba(239,68,68,0.15)'}`, color: value === false ? '#F87171' : '#475569' }}>
+          style={{
+            background: value === false ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.04)',
+            border: `2px solid ${value === false ? '#EF4444' : 'rgba(239,68,68,0.15)'}`,
+            color: value === false ? '#F87171' : '#475569',
+          }}
+        >
           ❌ No
         </button>
       </div>
-      <button type="button" onClick={onNoMeeting}
+      <button
+        type="button"
+        onClick={onNoMeeting}
         className="w-full py-4 rounded-2xl font-bold text-base transition-all"
-        style={{ background: isNoMeeting ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.04)', border: `2px solid ${isNoMeeting ? '#6366F1' : 'rgba(99,102,241,0.15)'}`, color: isNoMeeting ? '#818CF8' : '#475569' }}>
+        style={{
+          background: isNoMeeting ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.04)',
+          border: `2px solid ${isNoMeeting ? '#6366F1' : 'rgba(99,102,241,0.15)'}`,
+          color: isNoMeeting ? '#818CF8' : '#475569',
+        }}
+      >
         📅 Hoy no había reunión
       </button>
       {value === false && (
         <div>
           <label className="text-sm text-gray-400 mb-2 block">¿Por qué no pudiste asistir?</label>
-          <textarea value={nota} onChange={e => onNota(e.target.value)} rows={3} placeholder="Explicá brevemente el motivo..."
-            className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-base" />
+          <textarea
+            value={nota}
+            onChange={e => onNota(e.target.value)}
+            rows={3}
+            placeholder="Explicá brevemente el motivo..."
+            className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-base"
+          />
         </div>
       )}
     </div>
   )
 }
 
-export default function SetterWizard() {
+export default function SetterWizard({ existingReport }: Props) {
   const router = useRouter()
   const [userId, setUserId] = useState('')
   const [orgId, setOrgId] = useState('')
   const [nombre, setNombre] = useState('')
   const [step, setStep] = useState(0)
-  const [data, setData] = useState<SetterData>(initialData)
+  const [data, setData] = useState<SetterData>(existingReport ? { ...initialData, ...existingReport } : initialData)
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -148,15 +175,18 @@ export default function SetterWizard() {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push('/login'); return }
       setUserId(user.id)
+      // DB-ADAPT: profiles uses full_name/role/organization_id instead of nombre/rol
       const { data: profile } = await supabase.from('profiles').select('full_name, role, organization_id').eq('id', user.id).single()
       if (!profile || profile.role !== 'setter') { router.push('/login'); return }
       setNombre(profile.full_name || 'Setter')
       setOrgId(profile.organization_id || '')
       const today = new Date().toISOString().split('T')[0]
+      // DB-ADAPT: user_id instead of setter_id, maybeSingle instead of single
       const { data: rep } = await supabase.from('reportes_setter').select('*').eq('user_id', user.id).eq('fecha', today).maybeSingle()
       if (rep) {
         setData({
           ...initialData,
+          // DB-ADAPT: map DB column names back to wizard field names
           leads_recibidos: rep.leads_nuevos || 0,
           intentos_contacto: rep.intentos_contacto || 0,
           contactados: rep.contactos_efectivos || 0,
@@ -181,6 +211,7 @@ export default function SetterWizard() {
       }
 
       // Load user's projects
+      // DB-ADAPT: director_proyecto_miembros/director_proyectos instead of proyecto_miembros/proyectos
       const { data: miembros } = await supabase
         .from('director_proyecto_miembros')
         .select('proyecto_id, director_proyectos(id, nombre)')
@@ -206,6 +237,7 @@ export default function SetterWizard() {
   useEffect(() => {
     if (!proyectoId) return
     const supabase = createClient()
+    // DB-ADAPT: director_proyectos instead of proyectos
     supabase.from('director_proyectos').select('tipo, nombre').eq('id', proyectoId).single().then(({ data: proyecto }) => {
       const tipo = (proyecto?.tipo as 'evergreen' | 'lanzamiento') || 'evergreen'
       setProyectoTipo(tipo)
@@ -238,9 +270,14 @@ export default function SetterWizard() {
     </div>
   )
 
-  // EVERGREEN: 12 steps, LANZAMIENTO: 8 steps
+  // ---- EVERGREEN STEPS ----
+  // 0: Leads, 1: Intentos, 2: Contactados, 3: Agendadas, 4: DetalleCitas, 5: Show/NoShow, 6: Reprogramadas, 7: Calificadas, 8: Motivos, 9: Reunion, 10: Comentario, 11: Summary
   const EVERGREEN_TOTAL = 12
+
+  // ---- LANZAMIENTO STEPS ----
+  // 0: Mensajes, 1: Respuestas+Activas, 2: Leads calificados, 3: Llamadas agendadas DM, 4: Show/NoShow, 5: Reunion, 6: Comentario, 7: Summary
   const LANZAMIENTO_TOTAL = 8
+
   const totalSteps = proyectoTipo === 'lanzamiento' ? LANZAMIENTO_TOTAL : EVERGREEN_TOTAL
   const progress = ((step + 1) / totalSteps) * 100
 
@@ -258,7 +295,12 @@ export default function SetterWizard() {
 
   function handleNext() {
     if (proyectoTipo === 'evergreen') {
-      if (step === 3 && data.citas_agendadas === 0) { setStep(5); return }
+      // After citas_agendadas (step 3), skip detalle_citas if 0
+      if (step === 3 && data.citas_agendadas === 0) {
+        setStep(5)
+        return
+      }
+      // Entering detalle_citas step: auto-size array
       if (step === 3 && data.citas_agendadas > 0) {
         const count = data.citas_agendadas
         setData(prev => {
@@ -276,38 +318,35 @@ export default function SetterWizard() {
     setError('')
     const supabase = createClient()
 
-    const validCitas = data.detalle_citas.filter(c => c.nombre_lead.trim())
+    const { detalle_citas, ...restData } = data
+    const validCitas = detalle_citas.filter(c => c.nombre_lead.trim())
 
-    // Map wizard field names → DB column names
-    const payload = {
+    // DB-ADAPT: map wizard field names → DB column names, use user_id + organization_id
+    const { error: err } = await supabase.from('reportes_setter').upsert({
       user_id: userId,
       organization_id: orgId,
       fecha: new Date().toISOString().split('T')[0],
-      leads_nuevos: data.leads_recibidos,
-      intentos_contacto: data.intentos_contacto,
-      contactos_efectivos: data.contactados,
-      citas_agendadas: data.citas_agendadas,
-      citas_show: data.citas_show,
-      citas_no_show: data.citas_noshow,
-      citas_reprogramadas: data.citas_reprogramadas,
-      citas_calificadas: data.citas_calificadas,
-      motivos_noshow: data.motivos_noshow || null,
-      notas: data.comentario || null,
-      detalle_citas: validCitas.length > 0 ? validCitas : null,
-      mensajes_enviados: data.mensajes_enviados,
-      respuestas_recibidas: data.respuestas_obtenidas,
-      conversaciones_activas: data.conversaciones_activas,
-      leads_calificados_chat: data.leads_calificados_chat,
-      llamadas_agendadas_dm: data.llamadas_agendadas_dm,
-      asistio_reunion: data.nota_reunion === 'sin_reunion' ? null : (data.asistio_reunion ?? false),
-      nota_reunion: data.nota_reunion || null,
-      tipo_proyecto: data.tipo_proyecto,
+      leads_nuevos: restData.leads_recibidos,
+      intentos_contacto: restData.intentos_contacto,
+      contactos_efectivos: restData.contactados,
+      citas_agendadas: restData.citas_agendadas,
+      citas_show: restData.citas_show,
+      citas_no_show: restData.citas_noshow,
+      citas_reprogramadas: restData.citas_reprogramadas,
+      citas_calificadas: restData.citas_calificadas,
+      motivos_noshow: restData.motivos_noshow || null,
+      notas: restData.comentario || null,
+      mensajes_enviados: restData.mensajes_enviados,
+      respuestas_recibidas: restData.respuestas_obtenidas,
+      conversaciones_activas: restData.conversaciones_activas,
+      leads_calificados_chat: restData.leads_calificados_chat,
+      llamadas_agendadas_dm: restData.llamadas_agendadas_dm,
+      asistio_reunion: restData.nota_reunion === 'sin_reunion' ? null : (restData.asistio_reunion ?? false),
+      nota_reunion: restData.nota_reunion || null,
+      tipo_proyecto: restData.tipo_proyecto,
       ...(proyectoId ? { proyecto_id: proyectoId } : {}),
-    }
-
-    const { error: err } = await supabase.from('reportes_setter').upsert(payload, {
-      onConflict: 'organization_id,user_id,fecha,proyecto_id',
-    })
+      ...(validCitas.length > 0 ? { detalle_citas: validCitas } : {}),
+    }, { onConflict: 'organization_id,user_id,fecha,proyecto_id' })
 
     if (err) {
       setError('Error al enviar el reporte. Intentá de nuevo.')
@@ -344,12 +383,27 @@ export default function SetterWizard() {
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">Cita {i + 1}</span>
                 </div>
-                <input type="text" value={cita.nombre_lead} onChange={e => updateCita(i, 'nombre_lead', e.target.value)} placeholder="Nombre del lead"
-                  className="w-full bg-[#111827] border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm" />
-                <input type="text" value={cita.horario} onChange={e => updateCita(i, 'horario', e.target.value)} placeholder="Horario (ej: 10:00)"
-                  className="w-full bg-[#111827] border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm" />
-                <input type="text" value={cita.comentario} onChange={e => updateCita(i, 'comentario', e.target.value)} placeholder="Comentario breve (opcional)"
-                  className="w-full bg-[#111827] border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm" />
+                <input
+                  type="text"
+                  value={cita.nombre_lead}
+                  onChange={e => updateCita(i, 'nombre_lead', e.target.value)}
+                  placeholder="Nombre del lead"
+                  className="w-full bg-[#111827] border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+                />
+                <input
+                  type="text"
+                  value={cita.horario}
+                  onChange={e => updateCita(i, 'horario', e.target.value)}
+                  placeholder="Horario (ej: 10:00)"
+                  className="w-full bg-[#111827] border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+                />
+                <input
+                  type="text"
+                  value={cita.comentario}
+                  onChange={e => updateCita(i, 'comentario', e.target.value)}
+                  placeholder="Comentario breve (opcional)"
+                  className="w-full bg-[#111827] border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors text-sm"
+                />
               </div>
             ))}
           </div>
@@ -382,22 +436,37 @@ export default function SetterWizard() {
       case 8:
         return <StepContent title="Motivos No Show" question="¿Cuáles fueron los motivos de no show?" hint="Describe brevemente los motivos principales">
           <div className="mt-6">
-            <textarea value={data.motivos_noshow} onChange={e => updateField('motivos_noshow', e.target.value)} rows={4} placeholder="Escribí aquí..."
-              className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg" autoFocus />
+            <textarea
+              value={data.motivos_noshow}
+              onChange={e => updateField('motivos_noshow', e.target.value)}
+              rows={4}
+              placeholder="Escribí aquí..."
+              className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg"
+              autoFocus
+            />
           </div>
         </StepContent>
       case 9:
         return <StepContent title="Reunión de Equipo" question="¿Asististe a la reunión del equipo hoy?">
-          <ReunionStep value={data.asistio_reunion} nota={data.nota_reunion}
+          <ReunionStep
+            value={data.asistio_reunion}
+            nota={data.nota_reunion}
             onValue={v => { updateField('asistio_reunion', v); if (v !== false) updateField('nota_reunion', '') }}
             onNota={v => updateField('nota_reunion', v)}
-            onNoMeeting={() => { updateField('asistio_reunion', null); updateField('nota_reunion', 'sin_reunion') }} />
+            onNoMeeting={() => { updateField('asistio_reunion', null); updateField('nota_reunion', 'sin_reunion') }}
+          />
         </StepContent>
       case 10:
         return <StepContent title="Comentario General" question="¿Algún comentario o novedad del día?" hint="Observaciones importantes, contexto, etc.">
           <div className="mt-6">
-            <textarea value={data.comentario} onChange={e => updateField('comentario', e.target.value)} rows={4} placeholder="Escribí aquí..."
-              className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg" autoFocus />
+            <textarea
+              value={data.comentario}
+              onChange={e => updateField('comentario', e.target.value)}
+              rows={4}
+              placeholder="Escribí aquí..."
+              className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg"
+              autoFocus
+            />
           </div>
         </StepContent>
       case 11:
@@ -490,16 +559,25 @@ export default function SetterWizard() {
         </StepContent>
       case 5:
         return <StepContent title="Reunión de Equipo" question="¿Asististe a la reunión del equipo hoy?">
-          <ReunionStep value={data.asistio_reunion} nota={data.nota_reunion}
+          <ReunionStep
+            value={data.asistio_reunion}
+            nota={data.nota_reunion}
             onValue={v => { updateField('asistio_reunion', v); if (v !== false) updateField('nota_reunion', '') }}
             onNota={v => updateField('nota_reunion', v)}
-            onNoMeeting={() => { updateField('asistio_reunion', null); updateField('nota_reunion', 'sin_reunion') }} />
+            onNoMeeting={() => { updateField('asistio_reunion', null); updateField('nota_reunion', 'sin_reunion') }}
+          />
         </StepContent>
       case 6:
         return <StepContent title="Comentario del Día" question="¿Algún comentario o novedad del día?" hint="Observaciones importantes, contexto, etc.">
           <div className="mt-6">
-            <textarea value={data.comentario} onChange={e => updateField('comentario', e.target.value)} rows={4} placeholder="Escribí aquí..."
-              className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg" autoFocus />
+            <textarea
+              value={data.comentario}
+              onChange={e => updateField('comentario', e.target.value)}
+              rows={4}
+              placeholder="Escribí aquí..."
+              className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg"
+              autoFocus
+            />
           </div>
         </StepContent>
       case 7:
@@ -540,16 +618,19 @@ export default function SetterWizard() {
     }
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#080B14' }}>
-        <div className="rounded-2xl p-8 max-w-md w-full text-center" style={{ background: '#0D1117', border: '1px solid #1a2234' }}>
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-500/20 rounded-full mb-4">
+        <div className="glass-strong rounded-2xl p-8 max-w-md w-full text-center animate-fade-in-up">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-500/20 rounded-full mb-4 animate-pulse-glow">
             <CheckCircle size={32} className="text-emerald-400" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Reporte enviado</h2>
           <p className="text-gray-400 mb-4">Tu reporte de hoy fue registrado exitosamente.</p>
           <p className="text-gray-500 text-xs mb-6">Si cometiste un error, contactá al director para que lo corrija.</p>
-          <button onClick={handleLogout}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors">
-            <LogOut size={16} /> Cerrar sesión
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors"
+          >
+            <LogOut size={16} />
+            Cerrar sesión
           </button>
           <p className="text-gray-600 text-xs mt-6">Hasta mañana, {nombre}!</p>
         </div>
@@ -563,6 +644,7 @@ export default function SetterWizard() {
       <div className="px-4 pt-6 pb-4">
         <div className="flex items-center justify-between mb-4 max-w-lg mx-auto">
           <div className="flex items-center gap-2">
+            <img src="/arete.png" alt="Areté" className="w-5 h-5 object-contain" />
             <span className="text-sm font-medium text-gray-400">
               Areté Sales OS — Reporte Setter
               {proyectoTipo === 'lanzamiento' && (
@@ -574,16 +656,25 @@ export default function SetterWizard() {
           </div>
           <span className="text-sm text-gray-500">{step + 1} / {totalSteps}</span>
         </div>
+        {/* Progress bar */}
         <div className="max-w-lg mx-auto h-1.5 bg-gray-800 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${progress}%`, background: proyectoTipo === 'lanzamiento' ? 'linear-gradient(90deg, #8B5CF6, #A78BFA)' : 'linear-gradient(90deg, #6366F1, #8B5CF6)' }} />
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${progress}%`,
+              background: proyectoTipo === 'lanzamiento'
+                ? 'linear-gradient(90deg, #8B5CF6, #A78BFA)'
+                : 'linear-gradient(90deg, #6366F1, #8B5CF6)',
+            }}
+          />
         </div>
       </div>
 
       {/* Step content */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-8">
-        <div className="w-full max-w-lg" key={step}>
+        <div className="w-full max-w-lg animate-fade-in-up" key={step}>
           {proyectoTipo === 'lanzamiento' ? renderLanzamientoStep() : renderEvergreenStep()}
+
           {error && (
             <div className="mt-4 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
               <p className="text-red-400 text-sm">{error}</p>
@@ -596,19 +687,29 @@ export default function SetterWizard() {
       <div className="px-4 pb-8">
         <div className="flex gap-3 max-w-lg mx-auto">
           {step > 0 && (
-            <button onClick={() => setStep(s => s - 1)}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors">
-              <ChevronLeft size={18} /> Atrás
+            <button
+              onClick={() => setStep(s => s - 1)}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors"
+            >
+              <ChevronLeft size={18} />
+              Atrás
             </button>
           )}
+
           {step < totalSteps - 1 ? (
-            <button onClick={handleNext}
-              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold transition-all shadow-lg">
-              Siguiente <ChevronRight size={18} />
+            <button
+              onClick={handleNext}
+              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold transition-all shadow-lg"
+            >
+              Siguiente
+              <ChevronRight size={18} />
             </button>
           ) : (
-            <button onClick={handleSubmit} disabled={loading}
-              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold transition-all shadow-lg disabled:opacity-60">
+            <button
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold transition-all shadow-lg disabled:opacity-60"
+            >
               {loading ? (
                 <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Enviando...</>
               ) : (
@@ -618,6 +719,19 @@ export default function SetterWizard() {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function StepContent({ title, question, hint, children }: { title: string; question: string; hint?: string; children?: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-2">
+        <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider">{title}</span>
+      </div>
+      <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2 leading-tight">{question}</h2>
+      {hint && <p className="text-gray-500 text-sm mb-2">{hint}</p>}
+      {children}
     </div>
   )
 }

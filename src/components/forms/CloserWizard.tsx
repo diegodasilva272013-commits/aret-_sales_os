@@ -76,6 +76,12 @@ const initialData: CloserData = {
   tipo_proyecto: 'evergreen',
 }
 
+interface Props {
+  userId?: string
+  nombre?: string
+  existingReport?: CloserData | null
+}
+
 interface ProyectoOption {
   id: string
   nombre: string
@@ -106,48 +112,82 @@ function StepWrapper({ title, question, hint, children }: { title: string; quest
 }
 
 function ReunionStep({
-  value, nota, onValue, onNota, onNoMeeting,
+  value,
+  nota,
+  onValue,
+  onNota,
+  onNoMeeting,
 }: {
-  value: boolean | null; nota: string; onValue: (v: boolean) => void; onNota: (v: string) => void; onNoMeeting: () => void
+  value: boolean | null
+  nota: string
+  onValue: (v: boolean) => void
+  onNota: (v: string) => void
+  onNoMeeting: () => void
 }) {
   const isNoMeeting = value === null && nota === 'sin_reunion'
   return (
     <div className="mt-6 space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        <button type="button" onClick={() => onValue(true)}
+        <button
+          type="button"
+          onClick={() => onValue(true)}
           className="w-full py-6 rounded-2xl font-bold text-xl transition-all"
-          style={{ background: value === true ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.06)', border: `2px solid ${value === true ? '#10B981' : 'rgba(16,185,129,0.2)'}`, color: value === true ? '#34D399' : '#475569' }}>
+          style={{
+            background: value === true ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.06)',
+            border: `2px solid ${value === true ? '#10B981' : 'rgba(16,185,129,0.2)'}`,
+            color: value === true ? '#34D399' : '#475569',
+          }}
+        >
           ✅ Sí
         </button>
-        <button type="button" onClick={() => onValue(false)}
+        <button
+          type="button"
+          onClick={() => onValue(false)}
           className="w-full py-6 rounded-2xl font-bold text-xl transition-all"
-          style={{ background: value === false ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.04)', border: `2px solid ${value === false ? '#EF4444' : 'rgba(239,68,68,0.15)'}`, color: value === false ? '#F87171' : '#475569' }}>
+          style={{
+            background: value === false ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.04)',
+            border: `2px solid ${value === false ? '#EF4444' : 'rgba(239,68,68,0.15)'}`,
+            color: value === false ? '#F87171' : '#475569',
+          }}
+        >
           ❌ No
         </button>
       </div>
-      <button type="button" onClick={onNoMeeting}
+      <button
+        type="button"
+        onClick={onNoMeeting}
         className="w-full py-4 rounded-2xl font-bold text-base transition-all"
-        style={{ background: isNoMeeting ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.04)', border: `2px solid ${isNoMeeting ? '#6366F1' : 'rgba(99,102,241,0.15)'}`, color: isNoMeeting ? '#818CF8' : '#475569' }}>
+        style={{
+          background: isNoMeeting ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.04)',
+          border: `2px solid ${isNoMeeting ? '#6366F1' : 'rgba(99,102,241,0.15)'}`,
+          color: isNoMeeting ? '#818CF8' : '#475569',
+        }}
+      >
         📅 Hoy no había reunión
       </button>
       {value === false && (
         <div>
           <label className="text-sm text-gray-400 mb-2 block">¿Por qué no pudiste asistir?</label>
-          <textarea value={nota} onChange={e => onNota(e.target.value)} rows={3} placeholder="Explicá brevemente el motivo..."
-            className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-base" />
+          <textarea
+            value={nota}
+            onChange={e => onNota(e.target.value)}
+            rows={3}
+            placeholder="Explicá brevemente el motivo..."
+            className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-base"
+          />
         </div>
       )}
     </div>
   )
 }
 
-export default function CloserWizard() {
+export default function CloserWizard({ existingReport }: Props) {
   const router = useRouter()
   const [userId, setUserId] = useState('')
   const [orgId, setOrgId] = useState('')
   const [nombre, setNombre] = useState('')
   const [step, setStep] = useState(0)
-  const [data, setData] = useState<CloserData>(initialData)
+  const [data, setData] = useState<CloserData>(existingReport ? { ...initialData, ...existingReport } : initialData)
   const [submitted, setSubmitted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -163,15 +203,18 @@ export default function CloserWizard() {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { router.push('/login'); return }
       setUserId(user.id)
+      // DB-ADAPT: profiles uses full_name/role/organization_id instead of nombre/rol
       const { data: profile } = await supabase.from('profiles').select('full_name, role, organization_id').eq('id', user.id).single()
       if (!profile || profile.role !== 'closer') { router.push('/login'); return }
       setNombre(profile.full_name || 'Closer')
       setOrgId(profile.organization_id || '')
       const today = new Date().toISOString().split('T')[0]
+      // DB-ADAPT: user_id instead of closer_id, maybeSingle instead of single
       const { data: rep } = await supabase.from('reportes_closer').select('*').eq('user_id', user.id).eq('fecha', today).maybeSingle()
       if (rep) {
         setData({
           ...initialData,
+          // DB-ADAPT: map DB column names back to wizard field names
           citas_recibidas: rep.citas_tomadas || 0,
           citas_show: rep.citas_show || rep.shows || 0,
           citas_noshow: rep.citas_noshow || 0,
@@ -203,6 +246,7 @@ export default function CloserWizard() {
       }
 
       // Load user's projects
+      // DB-ADAPT: director_proyecto_miembros/director_proyectos instead of proyecto_miembros/proyectos
       const { data: miembros } = await supabase
         .from('director_proyecto_miembros')
         .select('proyecto_id, director_proyectos(id, nombre)')
@@ -224,9 +268,11 @@ export default function CloserWizard() {
     })
   }, [router])
 
+  // Fetch project tipo when proyectoId is set
   useEffect(() => {
     if (!proyectoId) return
     const supabase = createClient()
+    // DB-ADAPT: director_proyectos instead of proyectos
     supabase.from('director_proyectos').select('tipo, nombre').eq('id', proyectoId).single().then(({ data: proyecto }) => {
       const tipo = (proyecto?.tipo as 'evergreen' | 'lanzamiento') || 'evergreen'
       setProyectoTipo(tipo)
@@ -258,8 +304,11 @@ export default function CloserWizard() {
     </div>
   )
 
+  // EVERGREEN: 8 steps (0-7) — pagos auto-computed
   const EVERGREEN_TOTAL = 8
+  // LANZAMIENTO: 10 steps (0-9) — pagos auto-computed
   const LANZAMIENTO_TOTAL = 10
+
   const TOTAL_STEPS = proyectoTipo === 'lanzamiento' ? LANZAMIENTO_TOTAL : EVERGREEN_TOTAL
 
   function update(field: keyof CloserData, value: unknown) {
@@ -286,8 +335,13 @@ export default function CloserWizard() {
       const fecha = new Date().toISOString().split('T')[0]
       const ext = file.name.split('.').pop() || 'bin'
       const safeName = `${fecha}/${userId}/${index}_${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('comprobantes').upload(safeName, file, { upsert: true })
-      if (upErr) { setError(`Error al subir archivo: ${upErr.message}`); return }
+      const { error: upErr } = await supabase.storage
+        .from('comprobantes')
+        .upload(safeName, file, { upsert: true })
+      if (upErr) {
+        setError(`Error al subir archivo: ${upErr.message}`)
+        return
+      }
       const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(safeName)
       setData(prev => {
         const updated = [...prev.detalle_ventas]
@@ -320,12 +374,14 @@ export default function CloserWizard() {
 
   function handleNext() {
     let nextStep = step + 1
-    const saleDetailIdx = 3
+    const saleDetailIdx = 3 // both evergreen and lanzamiento
 
+    // Skip detalle step if no ventas
     if (nextStep === saleDetailIdx && data.ventas_cerradas === 0) {
       nextStep = saleDetailIdx + 1
     }
 
+    // Auto-create sale detail entries when entering the sale detail step
     if (nextStep === saleDetailIdx && data.ventas_cerradas > 0) {
       setData(prev => {
         const target = prev.ventas_cerradas
@@ -341,11 +397,18 @@ export default function CloserWizard() {
       })
     }
 
+    // Validate detalle step: all entries must have monto > 0, cliente, and comprobante
     if (step === saleDetailIdx && data.ventas_cerradas > 0) {
       const incomplete = data.detalle_ventas.some(s => !s.cliente.trim() || s.monto <= 0)
-      if (incomplete) { setError('Completá el nombre del cliente y monto de cada venta antes de continuar.'); return }
+      if (incomplete) {
+        setError('Completá el nombre del cliente y monto de cada venta antes de continuar.')
+        return
+      }
       const sinComprobante = data.detalle_ventas.some(s => !s.comprobante_url.trim())
-      if (sinComprobante) { setError('Cada venta necesita un comprobante. Subí un archivo o pegá un link de Google Drive.'); return }
+      if (sinComprobante) {
+        setError('Cada venta necesita un comprobante. Subí un archivo o pegá un link de Google Drive.')
+        return
+      }
       setError('')
     }
 
@@ -357,17 +420,20 @@ export default function CloserWizard() {
     setError('')
     const supabase = createClient()
 
+    // Only count sales with actual amounts
     const validSales = data.detalle_ventas.filter(s => s.monto > 0)
     const totalCerrado = validSales.reduce((sum, s) => sum + s.monto, 0)
     const totalCobrado = validSales.reduce((sum, s) => sum + s.cobrado, 0)
     const totalPendiente = validSales.reduce((sum, s) => sum + s.pendiente, 0)
     const ticketProm = validSales.length > 0 ? totalCerrado / validSales.length : 0
+
+    // Auto-compute pagos from detalle_ventas (count, not amounts)
     const pagosCompletos = validSales.filter(s => s.cobrado >= s.monto).length
     const pagosParciales = validSales.filter(s => s.cobrado > 0 && s.cobrado < s.monto).length
     const pagosNulo = validSales.filter(s => s.cobrado === 0).length
 
-    // Map wizard field names → DB column names
-    const payload = {
+    // DB-ADAPT: map wizard field names → DB column names, use user_id + organization_id
+    const { error: err } = await supabase.from('reportes_closer').upsert({
       user_id: userId,
       organization_id: orgId,
       fecha: new Date().toISOString().split('T')[0],
@@ -377,13 +443,14 @@ export default function CloserWizard() {
       citas_noshow: data.citas_noshow,
       ventas_cerradas: data.ventas_cerradas,
       ventas_no_cerradas: data.ventas_no_cerradas,
+      detalle_ventas: validSales.length > 0 ? validSales : null,
       monto_cerrado: totalCerrado,
       monto_cobrado: totalCobrado,
       monto_pendiente: totalPendiente,
       pagos_completos: pagosCompletos,
       pagos_parciales: pagosParciales,
       pagos_nulo: pagosNulo,
-      detalle_ventas: validSales.length > 0 ? validSales : null,
+      ticket_promedio: ticketProm,
       motivo_precio: data.motivo_precio,
       motivo_consultar: data.motivo_consultar,
       motivo_momento: data.motivo_momento,
@@ -398,19 +465,15 @@ export default function CloserWizard() {
       asistio_reunion: data.nota_reunion === 'sin_reunion' ? null : (data.asistio_reunion ?? false),
       nota_reunion: data.nota_reunion || null,
       tipo_proyecto: data.tipo_proyecto,
-      ticket_promedio: ticketProm,
       ...(proyectoId ? { proyecto_id: proyectoId } : {}),
-    }
-
-    const { error: err } = await supabase.from('reportes_closer').upsert(payload, {
-      onConflict: 'organization_id,user_id,fecha,proyecto_id',
-    })
+    }, { onConflict: 'organization_id,user_id,fecha,proyecto_id' })
 
     if (err) {
       setError('Error al enviar el reporte. Intentá de nuevo.')
       setLoading(false)
       return
     }
+
     setSubmitted(true)
     setLoading(false)
   }
@@ -481,11 +544,19 @@ export default function CloserWizard() {
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <label className="relative cursor-pointer">
-                        <input type="file" accept="image/*,.pdf,.doc,.docx" className="hidden"
-                          onChange={e => { const file = e.target.files?.[0]; if (file) handleFileUpload(i, file); e.target.value = '' }}
-                          disabled={uploading[i]} />
+                        <input type="file" accept="image/*,.pdf,.doc,.docx"
+                          className="hidden"
+                          onChange={e => {
+                            const file = e.target.files?.[0]
+                            if (file) handleFileUpload(i, file)
+                            e.target.value = ''
+                          }}
+                          disabled={uploading[i]}
+                        />
                         <div className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
-                          uploading[i] ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300' : 'border-gray-600 hover:border-indigo-500 hover:bg-indigo-500/5 text-gray-300'
+                          uploading[i]
+                            ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'
+                            : 'border-gray-600 hover:border-indigo-500 hover:bg-indigo-500/5 text-gray-300'
                         }`}>
                           {uploading[i] ? (
                             <><div className="w-3 h-3 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" /> Subiendo...</>
@@ -495,7 +566,10 @@ export default function CloserWizard() {
                         </div>
                       </label>
                       <button type="button"
-                        onClick={() => { const url = prompt('Pegá el link de Google Drive:'); if (url && url.trim()) setDriveLink(i, url.trim()) }}
+                        onClick={() => {
+                          const url = prompt('Pegá el link de Google Drive:')
+                          if (url && url.trim()) setDriveLink(i, url.trim())
+                        }}
                         className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-600 hover:border-indigo-500 hover:bg-indigo-500/5 text-gray-300 text-xs font-medium transition-all">
                         <Link2 size={14} /> Link de Drive
                       </button>
@@ -557,7 +631,8 @@ export default function CloserWizard() {
             </div>
           </StepWrapper>
         )
-      case 3: return saleDetailStep
+      case 3:
+        return saleDetailStep
       case 4:
         return (
           <StepWrapper title="Motivos de No Cierre" question="¿Cuántas objeciones tuviste por cada motivo?">
@@ -582,18 +657,27 @@ export default function CloserWizard() {
       case 5:
         return (
           <StepWrapper title="Reunión de Equipo" question="¿Asististe a la reunión del equipo hoy?">
-            <ReunionStep value={data.asistio_reunion} nota={data.nota_reunion}
-              onValue={v => { update('asistio_reunion', v); if (v === true) update('nota_reunion', '') }}
+            <ReunionStep
+              value={data.asistio_reunion}
+              nota={data.nota_reunion}
+              onValue={v => { update('asistio_reunion', v); if (v === true) update('nota_reunion', ''); }}
               onNota={v => update('nota_reunion', v)}
-              onNoMeeting={() => { update('asistio_reunion', null); update('nota_reunion', 'sin_reunion') }} />
+              onNoMeeting={() => { update('asistio_reunion', null); update('nota_reunion', 'sin_reunion'); }}
+            />
           </StepWrapper>
         )
       case 6:
         return (
           <StepWrapper title="Comentario General" question="¿Algún comentario o novedad del día?">
             <div className="mt-6">
-              <textarea value={data.comentario} onChange={e => update('comentario', e.target.value)} rows={4} placeholder="Escribí aquí..."
-                className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg" autoFocus />
+              <textarea
+                value={data.comentario}
+                onChange={e => update('comentario', e.target.value)}
+                rows={4}
+                placeholder="Escribí aquí..."
+                className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg"
+                autoFocus
+              />
             </div>
           </StepWrapper>
         )
@@ -628,7 +712,8 @@ export default function CloserWizard() {
           </StepWrapper>
         )
       }
-      default: return null
+      default:
+        return null
     }
   }
 
@@ -665,7 +750,8 @@ export default function CloserWizard() {
             </div>
           </StepWrapper>
         )
-      case 3: return saleDetailStep
+      case 3:
+        return saleDetailStep
       case 4:
         return (
           <StepWrapper title="Objeciones" question="¿Cuántas objeciones lograste resolver hoy?">
@@ -704,18 +790,27 @@ export default function CloserWizard() {
       case 7:
         return (
           <StepWrapper title="Reunión de Equipo" question="¿Asististe a la reunión del equipo hoy?">
-            <ReunionStep value={data.asistio_reunion} nota={data.nota_reunion}
-              onValue={v => { update('asistio_reunion', v); if (v === true) update('nota_reunion', '') }}
+            <ReunionStep
+              value={data.asistio_reunion}
+              nota={data.nota_reunion}
+              onValue={v => { update('asistio_reunion', v); if (v === true) update('nota_reunion', ''); }}
               onNota={v => update('nota_reunion', v)}
-              onNoMeeting={() => { update('asistio_reunion', null); update('nota_reunion', 'sin_reunion') }} />
+              onNoMeeting={() => { update('asistio_reunion', null); update('nota_reunion', 'sin_reunion'); }}
+            />
           </StepWrapper>
         )
       case 8:
         return (
           <StepWrapper title="Comentario del Día" question="¿Algún comentario o novedad del día?">
             <div className="mt-6">
-              <textarea value={data.comentario} onChange={e => update('comentario', e.target.value)} rows={4} placeholder="Escribí aquí..."
-                className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg" autoFocus />
+              <textarea
+                value={data.comentario}
+                onChange={e => update('comentario', e.target.value)}
+                rows={4}
+                placeholder="Escribí aquí..."
+                className="w-full bg-[#0D1117] border-2 border-gray-700 rounded-2xl px-5 py-4 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none text-lg"
+                autoFocus
+              />
             </div>
           </StepWrapper>
         )
@@ -753,7 +848,8 @@ export default function CloserWizard() {
           </StepWrapper>
         )
       }
-      default: return null
+      default:
+        return null
     }
   }
 
@@ -768,8 +864,8 @@ export default function CloserWizard() {
     }
     return (
       <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#080B14' }}>
-        <div className="rounded-2xl p-8 max-w-md w-full text-center" style={{ background: '#0D1117', border: '1px solid #1a2234' }}>
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-500/20 rounded-full mb-4">
+        <div className="glass-strong rounded-2xl p-8 max-w-md w-full text-center animate-fade-in-up">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-500/20 rounded-full mb-4 animate-pulse-glow">
             <CheckCircle size={32} className="text-emerald-400" />
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Reporte enviado</h2>
@@ -792,9 +888,12 @@ export default function CloserWizard() {
             <span className="text-emerald-400 font-semibold">{formatCurrency(totalCerrado)} en ventas hoy</span>
           </div>
           <p className="text-gray-500 text-xs mt-4 mb-4">Si cometiste un error, contactá al director para que lo corrija.</p>
-          <button onClick={handleLogout}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors">
-            <LogOut size={16} /> Cerrar sesión
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors"
+          >
+            <LogOut size={16} />
+            Cerrar sesión
           </button>
         </div>
       </div>
@@ -806,6 +905,7 @@ export default function CloserWizard() {
       <div className="px-4 pt-6 pb-4">
         <div className="flex items-center justify-between mb-4 max-w-lg mx-auto">
           <div className="flex items-center gap-2">
+            <img src="/arete.png" alt="Areté" className="w-5 h-5 object-contain" />
             <span className="text-sm font-medium text-gray-400">
               Areté Sales OS — Reporte Closer
               {proyectoTipo === 'lanzamiento' && (
@@ -818,13 +918,20 @@ export default function CloserWizard() {
           <span className="text-sm text-gray-500">{step + 1} / {TOTAL_STEPS}</span>
         </div>
         <div className="max-w-lg mx-auto h-1.5 bg-gray-800 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${progress}%`, background: proyectoTipo === 'lanzamiento' ? 'linear-gradient(90deg, #8B5CF6, #A78BFA)' : 'linear-gradient(90deg, #6366F1, #8B5CF6)' }} />
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${progress}%`,
+              background: proyectoTipo === 'lanzamiento'
+                ? 'linear-gradient(90deg, #8B5CF6, #A78BFA)'
+                : 'linear-gradient(90deg, #6366F1, #8B5CF6)',
+            }}
+          />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="w-full max-w-lg mx-auto" key={step}>
+        <div className="w-full max-w-lg mx-auto animate-fade-in-up" key={step}>
           {proyectoTipo === 'lanzamiento' ? renderLanzamientoStep() : renderEvergreenStep()}
           {error && (
             <div className="mt-4 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
@@ -839,13 +946,15 @@ export default function CloserWizard() {
           {step > 0 && (
             <button onClick={() => setStep(s => s - 1)}
               className="flex items-center gap-2 px-5 py-3 rounded-xl border border-gray-700 text-gray-300 hover:bg-gray-800 transition-colors">
-              <ChevronLeft size={18} /> Atrás
+              <ChevronLeft size={18} />
+              Atrás
             </button>
           )}
           {step < TOTAL_STEPS - 1 ? (
             <button onClick={handleNext}
               className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold transition-all shadow-lg">
-              Siguiente <ChevronRight size={18} />
+              Siguiente
+              <ChevronRight size={18} />
             </button>
           ) : (
             <button onClick={handleSubmit} disabled={loading}

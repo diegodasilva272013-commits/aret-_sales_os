@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import AgentConfigComponent from "@/components/agent/AgentConfig"
-import AgentAccounts from "@/components/agent/AgentAccounts"
+import AgentSettingsPage from "@/components/agent/AgentSettingsPage"
 
 export default async function AgentConfigPage() {
   const supabase = await createClient()
@@ -18,9 +17,8 @@ export default async function AgentConfigPage() {
 
   return (
     <div className="min-h-screen p-8 page-enter" style={{ background: "var(--background)" }}>
-      <div className="max-w-4xl mx-auto space-y-8">
-        <AgentConfigComponent />
-        <AgentAccounts />
+      <div className="max-w-4xl mx-auto">
+        <AgentSettingsPage />
       </div>
     </div>
   )

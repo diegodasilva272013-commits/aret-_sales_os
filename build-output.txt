@@ -6,15 +6,15 @@
 - Environments: .env.local
 
   Creating an optimized production build ...
-Ô£ô Compiled successfully in 84s
+Ô£ô Compiled successfully in 98s
   Skipping validation of types
-  Finished TypeScript config validation in 422ms ...
+  Finished TypeScript config validation in 1871ms ...
   Collecting page data using 7 workers ...
-  Generating static pages using 7 workers (0/135) ...
-  Generating static pages using 7 workers (33/135) 
-  Generating static pages using 7 workers (67/135) 
-  Generating static pages using 7 workers (101/135) 
-Ô£ô Generating static pages using 7 workers (135/135) in 6.2s
+  Generating static pages using 7 workers (0/136) ...
+  Generating static pages using 7 workers (34/136) 
+  Generating static pages using 7 workers (68/136) 
+  Generating static pages using 7 workers (102/136) 
+Ô£ô Generating static pages using 7 workers (136/136) in 9.9s
   Finalizing page optimization ...
 
 Route (app)
@@ -28,6 +28,7 @@ Route (app)
 Ôö£ ãÆ /api/admin/create-user
 Ôö£ ãÆ /api/admin/remove-setter
 Ôö£ ãÆ /api/agent/accounts
+Ôö£ ãÆ /api/agent/accounts/validate
 Ôö£ ãÆ /api/agent/config
 Ôö£ ãÆ /api/agent/cron
 Ôö£ ãÆ /api/agent/logs

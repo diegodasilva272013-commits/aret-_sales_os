@@ -16,6 +16,7 @@ export default function AgentAccounts() {
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ account_name: "", linkedin_email: "", session_cookie: "" })
   const [saving, setSaving] = useState(false)
+  const [validating, setValidating] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null)
 
   const showToast = (msg: string, type: "ok" | "err" = "ok") => {
@@ -63,6 +64,23 @@ export default function AgentAccounts() {
     } else {
       showToast("Error al eliminar", "err")
     }
+  }
+
+  const validateAccount = async (id: string) => {
+    setValidating(id)
+    try {
+      const res = await fetch("/api/agent/accounts/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: id }),
+      })
+      const d = await res.json()
+      showToast(d.message || (d.valid ? "Cookie válida" : "Cookie inválida"), d.valid ? "ok" : "err")
+      fetchAccounts()
+    } catch {
+      showToast("Error al validar", "err")
+    }
+    setValidating(null)
   }
 
   const inputStyle = {
@@ -182,6 +200,14 @@ export default function AgentAccounts() {
                   <span className="px-2 py-1 rounded-full text-[10px] font-semibold" style={{ background: st.color + "22", color: st.color }}>
                     {st.label}
                   </span>
+                  <button
+                    onClick={() => validateAccount(acc.id)}
+                    disabled={validating === acc.id}
+                    className="text-xs px-3 py-1 rounded-lg font-semibold transition-all"
+                    style={{ background: "rgba(0,119,181,0.12)", color: "#0077b5", opacity: validating === acc.id ? 0.5 : 1 }}
+                  >
+                    {validating === acc.id ? "Validando..." : "Validar"}
+                  </button>
                   <button onClick={() => removeAccount(acc.id)} className="text-xs px-2 py-1 rounded-lg transition-colors" style={{ color: "var(--text-muted)" }}
                     onMouseEnter={e => (e.currentTarget.style.color = "var(--danger)")}
                     onMouseLeave={e => (e.currentTarget.style.color = "var(--text-muted)")}

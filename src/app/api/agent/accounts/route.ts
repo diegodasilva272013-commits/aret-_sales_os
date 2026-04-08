@@ -12,7 +12,7 @@ export async function GET() {
     .order("created_at", { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ data })
+  return NextResponse.json({ accounts: data })
 }
 
 export async function POST(req: NextRequest) {
@@ -72,7 +72,7 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Solo owners pueden eliminar cuentas" }, { status: 403 })
   }
 
-  const { id } = await req.json()
+  const id = req.nextUrl.searchParams.get("id")
   if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 })
 
   const { error } = await scope.supabase

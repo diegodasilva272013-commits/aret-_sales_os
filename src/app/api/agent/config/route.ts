@@ -15,7 +15,7 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ data: data || null })
+  return NextResponse.json({ config: data || null })
 }
 
 export async function POST(req: NextRequest) {
@@ -50,5 +50,5 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ data })
+  return NextResponse.json({ config: data })
 }

@@ -176,7 +176,7 @@ export default function Sidebar({ profile, org, pendingFollowUps = 0, unreadMess
           </div>
           <div>
             <p className="font-bold text-sm truncate max-w-[140px]" suppressHydrationWarning style={{ color: "var(--text-primary)" }}>{org?.name || "Prospector AI"}</p>
-            <p className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>{org?.plan || "free"} · {org?.analyses_used || 0}/{org?.plan_limit || 50}</p>
+            <p className="text-xs capitalize" style={{ color: "var(--text-muted)" }}>{org?.plan || "free"} · {org?.analyses_used || 0}/{org?.plan_limit || 10}</p>
           </div>
         </div>
       </div>

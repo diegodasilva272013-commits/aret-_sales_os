@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import Stripe from "stripe"
+import { PLANS } from "@/lib/plans"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-03-25.dahlia" })
 
-const PLANS = {
+const STRIPE_PLANS = {
+  starter: {
+    price_id: process.env.STRIPE_PRICE_STARTER!,
+    plan: "starter",
+    plan_limit: PLANS.starter.analysesPerMonth,
+  },
   pro: {
     price_id: process.env.STRIPE_PRICE_PRO!,
     plan: "pro",
-    plan_limit: 200,
+    plan_limit: PLANS.pro.analysesPerMonth,
   },
   agency: {
     price_id: process.env.STRIPE_PRICE_AGENCY!,
     plan: "agency",
-    plan_limit: 999,
+    plan_limit: PLANS.agency.analysesPerMonth,
   },
 }
 
@@ -23,7 +29,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
   const { planKey } = await req.json()
-  const plan = PLANS[planKey as keyof typeof PLANS]
+  const plan = STRIPE_PLANS[planKey as keyof typeof STRIPE_PLANS]
   if (!plan) return NextResponse.json({ error: "Plan inválido" }, { status: 400 })
 
   // Obtener org del usuario

@@ -47,12 +47,12 @@ const terminos: Section[] = [
   {
     title: "4. Planes, Precios y Pagos",
     content: [
-      "La Plataforma ofrece tres planes de suscripción: Free (50 análisis/mes, sin costo), Pro (200 análisis/mes) y Agency (999 análisis/mes). Los precios vigentes se encuentran publicados en la sección de Configuración de la Plataforma.",
+      "La Plataforma ofrece cuatro planes de suscripción: Free (10 análisis/mes, sin costo), Starter (300 análisis/mes, $397/mes), Pro (1.000 análisis/mes, $797/mes) y Agency (5.000 análisis/mes, $1.497/mes). Los precios vigentes se encuentran publicados en la sección de Configuración de la Plataforma.",
       "Los pagos se procesan de forma segura a través de Stripe, Inc. Al suscribirte a un plan pago, autorizás el cobro recurrente mensual a través del método de pago registrado.",
       "Las suscripciones se renuevan automáticamente cada mes en la misma fecha de contratación. Es tu responsabilidad cancelar antes del próximo ciclo de facturación si no deseás continuar.",
       "No se realizan reembolsos por períodos parciales ni por análisis no utilizados durante el período de facturación.",
       "El contador de análisis se reinicia al inicio de cada nuevo ciclo de facturación mensual.",
-      "Si tu suscripción es cancelada (por vos o por falta de pago), tu organización revierte automáticamente al plan Free con un límite de 50 análisis.",
+      "Si tu suscripción es cancelada (por vos o por falta de pago), tu organización revierte automáticamente al plan Free con un límite de 10 análisis y 20 prospectos activos.",
       "Nos reservamos el derecho de modificar los precios con un aviso previo de 30 días por correo electrónico. Los cambios de precio aplican a partir del siguiente ciclo de facturación.",
       "En caso de disputa de pago, contactanos dentro de los 30 días posteriores al cargo."
     ]

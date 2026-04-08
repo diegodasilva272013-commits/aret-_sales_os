@@ -256,7 +256,7 @@ export default async function DashboardPage() {
             <p className="text-xs mb-4 capitalize" style={{ color: "var(--text-muted)" }}>Plan {org?.plan || "free"}</p>
             <div className="flex items-end gap-2 mb-3">
               <p className="text-4xl font-bold gradient-text">{org?.analyses_used || 0}</p>
-              <p className="text-sm mb-1" style={{ color: "var(--text-muted)" }}>/ {org?.plan_limit || 50} análisis</p>
+              <p className="text-sm mb-1" style={{ color: "var(--text-muted)" }}>/ {org?.plan_limit || 10} análisis</p>
             </div>
             <div className="w-full h-2.5 rounded-full mb-2" style={{ background: "var(--surface-2)" }}>
               <div className="h-full rounded-full transition-all" style={{
@@ -270,7 +270,7 @@ export default async function DashboardPage() {
             {/* Búsquedas */}
             <div className="flex items-end gap-2 mb-3">
               <p className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>{org?.searches_used || 0}</p>
-              <p className="text-sm mb-0.5" style={{ color: "var(--text-muted)" }}>/ {org?.search_limit || 50} búsquedas</p>
+              <p className="text-sm mb-0.5" style={{ color: "var(--text-muted)" }}>/ {org?.search_limit || 20} búsquedas</p>
             </div>
             <div className="w-full h-2 rounded-full mb-2" style={{ background: "var(--surface-2)" }}>
               <div className="h-full rounded-full transition-all" style={{

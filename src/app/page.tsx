@@ -65,7 +65,7 @@ export default async function RootPage() {
             Ver cómo funciona
           </a>
         </div>
-        <p className="mt-5 text-xs" style={{ color: "var(--text-muted)" }}>Sin tarjeta de crédito · 50 análisis gratis</p>
+        <p className="mt-5 text-xs" style={{ color: "var(--text-muted)" }}>Sin tarjeta de crédito · 10 análisis gratis</p>
       </section>
 
       {/* Features */}
@@ -114,16 +114,37 @@ export default async function RootPage() {
       </section>
 
       {/* Pricing */}
-      <section className="relative z-10 px-6 pb-32 max-w-4xl mx-auto">
+      <section className="relative z-10 px-6 pb-32 max-w-6xl mx-auto">
         <h2 className="text-3xl font-black text-center mb-3" style={{ color: "var(--text-primary)" }}>Planes simples</h2>
         <p className="text-center mb-12 text-sm" style={{ color: "var(--text-muted)" }}>Empezá gratis, escalá cuando lo necesités</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {[
-            { name: "Free", price: "$0", analyses: "50 análisis/mes", searches: "50 búsquedas/mes", setters: "1 setter", color: "var(--surface)", highlight: false },
-            { name: "Pro", price: "$49", analyses: "200 análisis/mes", searches: "200 búsquedas/mes", setters: "5 setters", color: "linear-gradient(135deg, rgba(108,99,255,0.15), rgba(124,58,237,0.15))", highlight: true },
-            { name: "Agency", price: "$150", analyses: "Ilimitado", searches: "Búsquedas ilimitadas", setters: "Setters ilimitados", color: "var(--surface)", highlight: false },
+            {
+              name: "Free", price: "$0", sub: "sin tarjeta",
+              features: ["1 usuario", "10 análisis IA/mes", "20 prospectos activos", "Dashboard 2 widgets", "DISC básico"],
+              noFeatures: ["Agente LinkedIn", "WhatsApp masivo", "VoIP llamadas", "Coach IA", "Módulo Director"],
+              color: "var(--surface)", highlight: false,
+            },
+            {
+              name: "Starter", price: "$397", sub: "por org/mes",
+              features: ["Hasta 3 usuarios", "300 análisis IA/mes", "500 prospectos activos", "200 prospecciones/mes", "Secuencia 22 días", "1 cuenta LinkedIn", "500 msgs WhatsApp/mes", "60 min VoIP/mes", "Videollamadas", "Dashboard completo", "Coach IA + Patterns", "DISC completo"],
+              noFeatures: ["Módulo Director"],
+              color: "var(--surface)", highlight: false,
+            },
+            {
+              name: "Pro", price: "$797", sub: "por org/mes",
+              features: ["Hasta 10 usuarios", "1.000 análisis IA/mes", "2.000 prospectos activos", "800 prospecciones/mes", "Secuencia 22 días", "3 cuentas LinkedIn", "5.000 msgs WhatsApp/mes", "300 min VoIP/mes", "Videollamadas", "Dashboard completo", "Coach IA + Patterns", "Módulo Director", "DISC completo"],
+              noFeatures: [],
+              color: "linear-gradient(135deg, rgba(108,99,255,0.15), rgba(124,58,237,0.15))", highlight: true,
+            },
+            {
+              name: "Agency", price: "$1.497", sub: "por org/mes",
+              features: ["Usuarios ilimitados", "5.000 análisis IA/mes", "Prospectos ilimitados", "3.000 prospecciones/mes", "Secuencia 22 días + custom", "10 cuentas LinkedIn", "WhatsApp ilimitado", "1.500 min VoIP/mes", "Videollamadas", "Dashboard completo", "Coach IA + Patterns", "Módulo Director", "DISC completo"],
+              noFeatures: [],
+              color: "var(--surface)", highlight: false,
+            },
           ].map(plan => (
-            <div key={plan.name} className="p-6 rounded-2xl relative"
+            <div key={plan.name} className="p-6 rounded-2xl relative flex flex-col"
               style={{ background: plan.color, border: plan.highlight ? "2px solid var(--accent)" : "1px solid var(--border)" }}>
               {plan.highlight && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-bold"
@@ -132,35 +153,39 @@ export default async function RootPage() {
                 </div>
               )}
               <h3 className="font-bold text-lg mb-1" style={{ color: "var(--text-primary)" }}>{plan.name}</h3>
-              <p className="text-3xl font-black mb-1 gradient-text">{plan.price}<span className="text-sm font-normal" style={{ color: "var(--text-muted)" }}>/mes</span></p>
-              <div className="mt-4 space-y-2 mb-6">
-                <p className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
-                  <span style={{ color: "var(--success)" }}>✓</span> {plan.analyses}
-                </p>
-                <p className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
-                  <span style={{ color: "var(--success)" }}>✓</span> {plan.searches}
-                </p>
-                <p className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
-                  <span style={{ color: "var(--success)" }}>✓</span> {plan.setters}
-                </p>
-                <p className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
-                  <span style={{ color: "var(--success)" }}>✓</span> Exportación CSV
-                </p>
-                <p className="text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
-                  <span style={{ color: "var(--success)" }}>✓</span> Panel admin
-                </p>
+              <p className="text-3xl font-black mb-0 gradient-text">{plan.price}<span className="text-sm font-normal" style={{ color: "var(--text-muted)" }}>/mes</span></p>
+              <p className="text-xs mb-4" style={{ color: "var(--text-muted)" }}>{plan.sub}</p>
+              <div className="space-y-1.5 mb-4 flex-1">
+                {plan.features.map(f => (
+                  <p key={f} className="text-xs flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
+                    <span style={{ color: "var(--success)" }}>✓</span> {f}
+                  </p>
+                ))}
+                {plan.noFeatures.map(f => (
+                  <p key={f} className="text-xs flex items-center gap-2" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
+                    <span>—</span> {f}
+                  </p>
+                ))}
               </div>
               <Link href="/login"
-                className="block w-full py-2.5 rounded-xl text-sm font-semibold text-center transition-all"
+                className="block w-full py-2.5 rounded-xl text-sm font-semibold text-center transition-all mt-auto"
                 style={{
                   background: plan.highlight ? "linear-gradient(135deg, var(--accent), #7c3aed)" : "var(--surface-2)",
                   color: plan.highlight ? "white" : "var(--text-secondary)",
                   border: plan.highlight ? "none" : "1px solid var(--border)",
                 }}>
-                Empezar
+                {plan.price === "$0" ? "Empezar gratis" : "Empezar"}
               </Link>
             </div>
           ))}
+        </div>
+
+        {/* Excedentes */}
+        <div className="mt-8 p-5 rounded-2xl text-center" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <p className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>¿Superaste tus límites?</p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Notificación al 80% de uso · Plan Free se bloquea al 100% · Planes pagos: excedente opcional desde +$0.08/análisis
+          </p>
         </div>
       </section>
 

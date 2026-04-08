@@ -174,21 +174,35 @@ export default function SettingsClient({ profile, team, org, calendarConnected }
                 <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Plan actual</h2>
                 <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                   <span className="capitalize font-semibold" style={{ color: "var(--accent-light)" }}>{org.plan}</span>
-                  {" · "}{org.analyses_used} / {org.plan_limit} análisis · {org.searches_used || 0} / {org.search_limit || 50} búsquedas
+                  {" · "}{org.analyses_used} / {org.plan_limit} análisis · {org.searches_used || 0} / {org.search_limit || 20} búsquedas
                 </p>
               </div>
               <div className="flex gap-2">
                 {org.plan === "free" && (
                   <>
+                    <button onClick={() => handleUpgrade("starter")} disabled={!!upgrading}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+                      style={{ background: "linear-gradient(135deg, var(--accent), #7c3aed)", color: "white" }}>
+                      {upgrading === "starter" ? "Redirigiendo..." : "↑ Starter — $397/mes"}
+                    </button>
+                    <button onClick={() => handleUpgrade("pro")} disabled={!!upgrading}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+                      style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+                      {upgrading === "pro" ? "Redirigiendo..." : "Pro — $797/mes"}
+                    </button>
+                  </>
+                )}
+                {org.plan === "starter" && (
+                  <>
                     <button onClick={() => handleUpgrade("pro")} disabled={!!upgrading}
                       className="px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
                       style={{ background: "linear-gradient(135deg, var(--accent), #7c3aed)", color: "white" }}>
-                      {upgrading === "pro" ? "Redirigiendo..." : "↑ Pro — $49/mes"}
+                      {upgrading === "pro" ? "Redirigiendo..." : "↑ Pro — $797/mes"}
                     </button>
                     <button onClick={() => handleUpgrade("agency")} disabled={!!upgrading}
                       className="px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
                       style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
-                      {upgrading === "agency" ? "Redirigiendo..." : "Agency — $150/mes"}
+                      {upgrading === "agency" ? "Redirigiendo..." : "Agency — $1.497/mes"}
                     </button>
                   </>
                 )}
@@ -196,7 +210,7 @@ export default function SettingsClient({ profile, team, org, calendarConnected }
                   <button onClick={() => handleUpgrade("agency")} disabled={!!upgrading}
                     className="px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
                     style={{ background: "linear-gradient(135deg, var(--accent), #7c3aed)", color: "white" }}>
-                    {upgrading === "agency" ? "Redirigiendo..." : "↑ Agency — $150/mes"}
+                    {upgrading === "agency" ? "Redirigiendo..." : "↑ Agency — $1.497/mes"}
                   </button>
                 )}
                 {org.plan === "agency" && (

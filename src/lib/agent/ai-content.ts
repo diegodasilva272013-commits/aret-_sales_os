@@ -3,7 +3,11 @@
 // =====================================================
 import OpenAI from "openai"
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+let _openai: OpenAI | null = null
+function getOpenAI() {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
+  return _openai
+}
 
 /** Generate a natural comment for a LinkedIn post */
 export async function generateComment(ctx: {
@@ -11,7 +15,7 @@ export async function generateComment(ctx: {
   prospectName: string
   prospectHeadline: string
 }): Promise<string> {
-  const res = await openai.chat.completions.create({
+  const res = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
@@ -40,7 +44,7 @@ export async function generateConnectionNote(ctx: {
   prospectCompany: string
   discType?: string | null
 }): Promise<string> {
-  const res = await openai.chat.completions.create({
+  const res = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {
@@ -71,7 +75,7 @@ export async function generateDirectMessage(ctx: {
   salesAngle?: string | null
   discType?: string | null
 }): Promise<string> {
-  const res = await openai.chat.completions.create({
+  const res = await getOpenAI().chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       {

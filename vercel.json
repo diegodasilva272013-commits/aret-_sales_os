@@ -1,6 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "NEXT_CACHE_DISABLED=1 next build",
+  "crons": [
+    {
+      "path": "/api/agent/cron",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

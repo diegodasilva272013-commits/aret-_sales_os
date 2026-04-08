@@ -33,18 +33,5 @@ export async function POST() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Notify microservice (fire and forget)
-  const webhookUrl = process.env.AGENT_SERVICE_URL
-  if (webhookUrl) {
-    fetch(`${webhookUrl}/start`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Webhook-Secret": process.env.AGENT_WEBHOOK_SECRET || "",
-      },
-      body: JSON.stringify({ organization_id: scope.organizationId }),
-    }).catch(() => {})
-  }
-
   return NextResponse.json({ data })
 }

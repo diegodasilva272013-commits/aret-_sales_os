@@ -4,8 +4,27 @@ import type { AgentConfig } from "@/types/agent"
 
 const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
 
+const DEFAULT_CONFIG: Partial<AgentConfig> = {
+  icp_industries: [],
+  icp_roles: [],
+  icp_company_size: "",
+  icp_locations: [],
+  icp_keywords: [],
+  daily_connection_limit: 20,
+  daily_comment_limit: 30,
+  daily_like_limit: 50,
+  delay_min_seconds: 45,
+  delay_max_seconds: 180,
+  active_hours_start: 9,
+  active_hours_end: 18,
+  active_days: [1, 2, 3, 4, 5],
+  warming_days: 3,
+  commenting_days: 2,
+  nurturing_days: 5,
+}
+
 export default function AgentConfigComponent() {
-  const [config, setConfig] = useState<Partial<AgentConfig>>({})
+  const [config, setConfig] = useState<Partial<AgentConfig>>(DEFAULT_CONFIG)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<"icp" | "limits" | "schedule" | "sequence">("icp")
@@ -17,28 +36,13 @@ export default function AgentConfigComponent() {
 
   const fetchConfig = useCallback(async () => {
     setLoading(true)
-    const res = await fetch("/api/agent/config")
-    if (res.ok) {
-      const d = await res.json()
-      setConfig(d.config ?? {
-        icp_industries: [],
-        icp_roles: [],
-        icp_company_size: "",
-        icp_locations: [],
-        icp_keywords: [],
-        daily_connection_limit: 20,
-        daily_comment_limit: 30,
-        daily_like_limit: 50,
-        delay_min_seconds: 45,
-        delay_max_seconds: 180,
-        active_hours_start: 9,
-        active_hours_end: 18,
-        active_days: [1, 2, 3, 4, 5],
-        warming_days: 3,
-        commenting_days: 2,
-        nurturing_days: 5,
-      })
-    }
+    try {
+      const res = await fetch("/api/agent/config")
+      if (res.ok) {
+        const d = await res.json()
+        setConfig(d.config || d.data || DEFAULT_CONFIG)
+      }
+    } catch { /* ignore */ }
     setLoading(false)
   }, [])
 
@@ -54,7 +58,7 @@ export default function AgentConfigComponent() {
     if (res.ok) {
       showToast("Configuración guardada")
       const d = await res.json()
-      setConfig(d.config)
+      setConfig(d.config || d.data || config)
     } else {
       const d = await res.json().catch(() => ({}))
       showToast(d.error || "Error al guardar", "err")

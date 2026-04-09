@@ -15,8 +15,8 @@ interface LinkedInSession {
 
 function headers(session: LinkedInSession) {
   return {
-    "Cookie": `li_at=${session.sessionCookie}`,
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Cookie": `li_at=${session.sessionCookie}; JSESSIONID="ajax:0"`,
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Accept": "application/vnd.linkedin.normalized+json+2.1",
     "X-Li-Lang": "es_ES",
     "X-Restli-Protocol-Version": "2.0.0",
@@ -33,8 +33,17 @@ function delay(minMs: number, maxMs: number): Promise<void> {
 /** Check if session cookie is still valid */
 export async function validateSession(session: LinkedInSession): Promise<boolean> {
   try {
-    const res = await fetch(`${LI_BASE}/voyager/api/me`, { headers: headers(session) })
-    return res.ok
+    const res = await fetch(`${LI_BASE}/voyager/api/me`, {
+      headers: headers(session),
+      redirect: "manual",
+    })
+    // LinkedIn returns 200 for valid session, 401/403 for invalid,
+    // or 3xx redirect to login for expired cookies
+    if (!res.ok) return false
+    const text = await res.text()
+    // If the response is empty or contains "login", the cookie is invalid
+    if (!text || text.includes("/uas/login")) return false
+    return true
   } catch {
     return false
   }

@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     .eq("id", scope.organizationId)
     .single()
 
-  const planLimits: Record<string, number> = { free: 0, starter: 1, pro: 3, agency: 10 }
+  const planLimits: Record<string, number> = { free: 1, starter: 1, pro: 3, agency: 10 }
   const maxAccounts = planLimits[org?.plan || "free"] || 0
 
   if ((count || 0) >= maxAccounts) {

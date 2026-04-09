@@ -6,7 +6,14 @@ export async function POST(req: NextRequest) {
   const scope = await getAgentScope()
   if (scope.error) return scope.error
 
-  const { accountId } = await req.json()
+  let body: { accountId?: string }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: "Body inválido" }, { status: 400 })
+  }
+
+  const { accountId } = body
   if (!accountId) {
     return NextResponse.json({ error: "accountId requerido" }, { status: 400 })
   }
@@ -23,31 +30,31 @@ export async function POST(req: NextRequest) {
   }
 
   if (!account.session_cookie) {
-    return NextResponse.json({ valid: false, message: "No hay cookie de sesión configurada" })
+    return NextResponse.json({ valid: false, message: "No hay cookie de sesión configurada. Editá la cuenta y pegá tu cookie li_at." })
   }
 
-  const valid = await validateSession({
-    sessionCookie: account.session_cookie,
-    accountId: account.id,
-  })
+  try {
+    const valid = await validateSession({
+      sessionCookie: account.session_cookie,
+      accountId: account.id,
+    })
 
-  // Update account status based on validation
-  if (valid) {
+    // Update account status based on validation
     await scope.supabase
       .from("agent_linkedin_accounts")
-      .update({ status: "active" })
+      .update({ status: valid ? "active" : "disconnected", last_action_at: new Date().toISOString() })
       .eq("id", accountId)
-  } else {
-    await scope.supabase
-      .from("agent_linkedin_accounts")
-      .update({ status: "disconnected" })
-      .eq("id", accountId)
+
+    return NextResponse.json({
+      valid,
+      message: valid
+        ? "Cookie válida — cuenta conectada correctamente"
+        : "Cookie inválida o expirada — iniciá sesión en LinkedIn y copiá la cookie li_at de nuevo",
+    })
+  } catch (e) {
+    return NextResponse.json({
+      valid: false,
+      message: `Error al validar: ${String(e)}`,
+    })
   }
-
-  return NextResponse.json({
-    valid,
-    message: valid
-      ? "Cookie válida — cuenta conectada correctamente"
-      : "Cookie inválida o expirada — iniciá sesión en LinkedIn y copiá la cookie de nuevo",
-  })
 }

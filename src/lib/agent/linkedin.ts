@@ -3,7 +3,10 @@
 // =====================================================
 // Uses session cookie (li_at) to interact with LinkedIn's
 // internal API. No browser needed — runs on Vercel.
+// Supports residential proxy via PROXY_URL env var.
 // =====================================================
+
+import { ProxyAgent } from "undici"
 
 const LI_BASE = "https://www.linkedin.com"
 const LI_API = "https://api.linkedin.com"
@@ -11,6 +14,22 @@ const LI_API = "https://api.linkedin.com"
 interface LinkedInSession {
   sessionCookie: string
   accountId: string
+}
+
+/** Get proxy dispatcher if PROXY_URL is configured */
+function getDispatcher(): ProxyAgent | undefined {
+  const proxyUrl = process.env.PROXY_URL
+  if (!proxyUrl) return undefined
+  return new ProxyAgent(proxyUrl)
+}
+
+/** Proxy-aware fetch — routes through residential proxy when configured */
+function liFetch(url: string, init?: RequestInit): Promise<Response> {
+  const dispatcher = getDispatcher()
+  if (dispatcher) {
+    return fetch(url, { ...init, dispatcher } as never)
+  }
+  return fetch(url, init)
 }
 
 function headers(session: LinkedInSession) {
@@ -38,7 +57,7 @@ export async function validateSession(session: LinkedInSession): Promise<boolean
 
 export async function validateSessionDetailed(session: LinkedInSession): Promise<{ valid: boolean; detail: string }> {
   try {
-    const res = await fetch(`${LI_BASE}/voyager/api/me`, {
+    const res = await liFetch(`${LI_BASE}/voyager/api/me`, {
       headers: headers(session),
       redirect: "manual",
     })
@@ -68,7 +87,7 @@ export async function viewProfile(
   publicId: string
 ): Promise<{ success: boolean; profileData?: Record<string, unknown>; error?: string }> {
   try {
-    const res = await fetch(
+    const res = await liFetch(
       `${LI_BASE}/voyager/api/identity/dash/profiles?q=memberIdentity&memberIdentity=${encodeURIComponent(publicId)}`,
       { headers: headers(session) }
     )
@@ -88,7 +107,7 @@ export async function likePost(
   activityUrn: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await fetch(`${LI_BASE}/voyager/api/voyagerSocialDashReactions?threadUrn=${encodeURIComponent(activityUrn)}`, {
+    const res = await liFetch(`${LI_BASE}/voyager/api/voyagerSocialDashReactions?threadUrn=${encodeURIComponent(activityUrn)}`, {
       method: "POST",
       headers: { ...headers(session), "Content-Type": "application/json" },
       body: JSON.stringify({ reactionType: "LIKE" }),
@@ -106,7 +125,7 @@ export async function commentOnPost(
   comment: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const res = await fetch(`${LI_BASE}/voyager/api/voyagerSocialDashComments`, {
+    const res = await liFetch(`${LI_BASE}/voyager/api/voyagerSocialDashComments`, {
       method: "POST",
       headers: { ...headers(session), "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -133,7 +152,7 @@ export async function sendConnection(
     }
     if (note) body.message = note.slice(0, 280)
 
-    const res = await fetch(`${LI_BASE}/voyager/api/voyagerRelationshipsDashMemberRelationships?action=verifyQuotaAndCreate`, {
+    const res = await liFetch(`${LI_BASE}/voyager/api/voyagerRelationshipsDashMemberRelationships?action=verifyQuotaAndCreate`, {
       method: "POST",
       headers: { ...headers(session), "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -152,7 +171,7 @@ export async function sendMessage(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Get or create conversation
-    const res = await fetch(`${LI_BASE}/voyager/api/voyagerMessagingDashMessengerMessages?action=createMessage`, {
+    const res = await liFetch(`${LI_BASE}/voyager/api/voyagerMessagingDashMessengerMessages?action=createMessage`, {
       method: "POST",
       headers: { ...headers(session), "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -187,7 +206,7 @@ export async function searchPeople(
     const vars = `(start:${start},origin:GLOBAL_SEARCH_HEADER,query:(keywords:${encodeURIComponent(keywords)},flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE)))))`
     const url = `${LI_BASE}/voyager/api/graphql?variables=${vars}&queryId=voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0`
 
-    const res = await fetch(url, {
+    const res = await liFetch(url, {
       headers: headers(session),
       redirect: "manual",
     })
@@ -246,7 +265,7 @@ export async function getProfilePosts(
   count = 5
 ): Promise<{ success: boolean; posts?: Array<{ urn: string; text: string; likeCount: number }>; error?: string }> {
   try {
-    const res = await fetch(
+    const res = await liFetch(
       `${LI_BASE}/voyager/api/identity/profileUpdatesV2?profileUrn=urn:li:fsd_profile:${encodeURIComponent(publicId)}&q=memberShareFeed&count=${count}`,
       { headers: headers(session) }
     )

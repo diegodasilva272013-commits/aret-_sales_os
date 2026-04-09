@@ -43,6 +43,7 @@ export async function proxy(request: NextRequest) {
     || request.nextUrl.pathname.startsWith("/api/stripe")
     || request.nextUrl.pathname.startsWith("/api/director/webhook/meta")
     || request.nextUrl.pathname.startsWith("/api/agent/cron")
+    || request.nextUrl.pathname.startsWith("/api/agent/test-run")
 
   if (!user && !isAuthPage && !isPublicRoute && !isWebhook) {
     const url = request.nextUrl.clone()

@@ -25,30 +25,68 @@ function getDispatcher(): ProxyAgent | undefined {
 }
 
 /** Save updated cookies back to DB when LinkedIn sends set-cookie */
-async function persistCookies(res: Response, session: LinkedInSession): Promise<void> {
+async function persistCookies(setCookieHeader: string | null, session: LinkedInSession): Promise<void> {
   try {
-    const setCookie = res.headers.get("set-cookie")
-    if (!setCookie) return
-    // Extract new li_at if LinkedIn rotated it
-    const liAtMatch = setCookie.match(/li_at=([^;]+)/)
+    if (!setCookieHeader) return
+    const liAtMatch = setCookieHeader.match(/li_at=([^;]+)/)
     if (liAtMatch && liAtMatch[1] !== session.sessionCookie) {
       const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
       await sb.from("agent_linkedin_accounts")
         .update({ session_cookie: liAtMatch[1] })
         .eq("id", session.accountId)
-      session.sessionCookie = liAtMatch[1] // Update in-memory too
+      session.sessionCookie = liAtMatch[1]
     }
   } catch { /* non-critical */ }
 }
 
-/** Proxy-aware fetch — routes through residential proxy when configured */
+/**
+ * Smart fetch — uses CF Worker relay, PROXY_URL, or direct fetch.
+ * Priority: CF_RELAY_URL > PROXY_URL > direct
+ */
 async function liFetch(url: string, init?: RequestInit, session?: LinkedInSession): Promise<Response> {
+  const relayUrl = process.env.CF_RELAY_URL
+  const relaySecret = process.env.CF_RELAY_SECRET
+
+  // Option 1: Cloudflare Worker relay (best for avoiding datacenter IP detection)
+  if (relayUrl && relaySecret) {
+    const method = init?.method || "GET"
+    const relayBody: Record<string, unknown> = {
+      url,
+      method,
+      headers: init?.headers || {},
+    }
+    if (init?.body && method !== "GET") {
+      relayBody.bodyContent = JSON.parse(init.body as string)
+    }
+
+    const relayRes = await fetch(relayUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Relay-Secret": relaySecret,
+      },
+      body: JSON.stringify(relayBody),
+    })
+    const data = await relayRes.json() as { status: number; statusText: string; headers: Record<string, string>; body: string }
+
+    // Persist cookies from relay response
+    if (session) await persistCookies(data.headers?.["set-cookie"] || null, session)
+
+    // Reconstruct a Response object
+    return new Response(data.body, {
+      status: data.status,
+      statusText: data.statusText,
+      headers: data.headers,
+    })
+  }
+
+  // Option 2: HTTP proxy
   const dispatcher = getDispatcher()
   const res = dispatcher
     ? await fetch(url, { ...init, dispatcher } as never)
     : await fetch(url, init)
-  // Persist any cookie rotations
-  if (session) await persistCookies(res, session)
+
+  if (session) await persistCookies(res.headers.get("set-cookie"), session)
   return res
 }
 

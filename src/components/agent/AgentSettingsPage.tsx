@@ -545,17 +545,39 @@ export default function AgentSettingsPage() {
                         <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
                           📋 Cómo obtener tu cookie li_at:
                         </p>
-                        <ol className="text-[11px] space-y-1 list-decimal list-inside" style={{ color: "var(--text-muted)" }}>
-                          <li>Abrí <a href="https://www.linkedin.com" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--accent)" }}>linkedin.com</a> y asegurate de estar <b>logueado</b></li>
-                          <li>Presioná <b>F12</b> (o clic derecho → Inspeccionar)</li>
-                          <li>Andá a la pestaña <b>Application</b> (o Aplicación)</li>
-                          <li>En el panel izquierdo: <b>Cookies</b> → <b>https://www.linkedin.com</b></li>
-                          <li>Buscá la cookie <b>li_at</b> y hacé <b>doble clic en el valor</b></li>
-                          <li>Copiá TODO el valor (Ctrl+C) y pegalo acá abajo</li>
-                        </ol>
-                        <div className="p-2 rounded text-[10px]" style={{ background: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>
-                          ⚠️ Importante: Copiá el valor COMPLETO (empieza con AQED... y tiene ~200+ caracteres)
+
+                        {/* Method A */}
+                        <div className="p-3 rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                          <p className="text-[11px] font-bold mb-1" style={{ color: "var(--accent)" }}>Método 1 — Application Tab</p>
+                          <ol className="text-[11px] space-y-0.5 list-decimal list-inside" style={{ color: "var(--text-muted)" }}>
+                            <li><b>Cerrá sesión</b> en LinkedIn y volvé a <b>iniciar sesión manualmente</b></li>
+                            <li>Presioná <b>F12</b> → pestaña <b>Application</b> → <b>Cookies</b> → linkedin.com</li>
+                            <li>Buscá <b>li_at</b> → doble clic en el valor → copiá</li>
+                          </ol>
                         </div>
+
+                        {/* Method B */}
+                        <div className="p-3 rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                          <p className="text-[11px] font-bold mb-1" style={{ color: "#22c55e" }}>Método 2 — Network Tab (si li_at no aparece en Application)</p>
+                          <ol className="text-[11px] space-y-0.5 list-decimal list-inside" style={{ color: "var(--text-muted)" }}>
+                            <li>Abrí linkedin.com con <b>F12</b> abierto → pestaña <b>Network</b></li>
+                            <li>Recargá la página (F5)</li>
+                            <li>Hacé clic en <b>cualquier request</b> que diga &quot;voyager&quot; o &quot;linkedin.com&quot;</li>
+                            <li>En la sección <b>Request Headers</b> → buscá <b>Cookie:</b></li>
+                            <li>Dentro del texto, buscá <b>li_at=</b> y copiá todo desde <b>AQED...</b> hasta el próximo <b>;</b></li>
+                          </ol>
+                        </div>
+
+                        {/* Method C */}
+                        <div className="p-3 rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                          <p className="text-[11px] font-bold mb-1" style={{ color: "#f59e0b" }}>Método 3 — Si nada funciona</p>
+                          <ol className="text-[11px] space-y-0.5 list-decimal list-inside" style={{ color: "var(--text-muted)" }}>
+                            <li>Instalá la extensión <a href="https://chromewebstore.google.com/detail/cookie-editor/hlkenndednhfkekhgcdicdfddnkalmdm" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--accent)" }}>Cookie-Editor</a> en Chrome</li>
+                            <li>Abrí linkedin.com → clic en el ícono de Cookie-Editor</li>
+                            <li>Buscá <b>li_at</b> → copiá el valor</li>
+                          </ol>
+                        </div>
+
                         <input
                           value={newCookie}
                           onChange={e => setNewCookie(e.target.value)}
@@ -565,8 +587,8 @@ export default function AgentSettingsPage() {
                           style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
                         />
                         {newCookie && (
-                          <p className="text-[10px]" style={{ color: newCookie.length > 100 && newCookie.startsWith("AQED") ? "#22c55e" : "#ef4444" }}>
-                            {newCookie.length} caracteres {newCookie.startsWith("AQED") ? "✓ formato correcto" : "✗ debe empezar con AQED"}
+                          <p className="text-[10px]" style={{ color: newCookie.length > 100 ? "#22c55e" : "#ef4444" }}>
+                            {newCookie.length} caracteres {newCookie.length > 100 ? "✓ largo suficiente" : "✗ muy corta, asegurate de copiar completa"}
                           </p>
                         )}
                         <div className="flex gap-2">

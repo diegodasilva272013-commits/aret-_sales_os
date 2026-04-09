@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import OpenAI from "openai"
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+let _ai: OpenAI
+const openai = new Proxy({} as OpenAI, { get(_, p: string) { const c = _ai ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }); const v = (c as any)[p]; return typeof v === "function" ? v.bind(c) : v } })
 
 export async function GET() {
   try {

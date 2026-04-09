@@ -3,10 +3,8 @@ import { createClient } from "@supabase/supabase-js"
 
 // Endpoint de diagnóstico temporal - usa service_role para bypasear RLS
 // DELETE THIS AFTER DEBUGGING
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+let _sb: any
+const supabase = new Proxy({} as any, { get(_, p: string) { const c = _sb ??= createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!); const v = c[p]; return typeof v === "function" ? v.bind(c) : v } })
 
 export async function GET(req: NextRequest) {
   const prospectId = req.nextUrl.searchParams.get("prospect_id") || "9f7e6374-2af3-4c6e-85b9-528e083728ee"

@@ -4,11 +4,9 @@ import OpenAI from "openai"
 
 export const maxDuration = 120
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+let _sb: any, _ai: OpenAI
+const supabase = new Proxy({} as any, { get(_, p: string) { const c = _sb ??= createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!); const v = c[p]; return typeof v === "function" ? v.bind(c) : v } })
+const openai = new Proxy({} as OpenAI, { get(_, p: string) { const c = _ai ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }); const v = (c as any)[p]; return typeof v === "function" ? v.bind(c) : v } })
 
 async function transcribeBase64(base64: string, identity: string): Promise<string> {
   try {

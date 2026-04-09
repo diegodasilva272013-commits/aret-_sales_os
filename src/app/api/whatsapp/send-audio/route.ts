@@ -9,10 +9,8 @@ import { promisify } from "util"
 
 const execFileAsync = promisify(execFile)
 
-const supabaseAdmin = createServiceClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+let _sb: any
+const supabaseAdmin = new Proxy({} as any, { get(_, p: string) { const c = _sb ??= createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!); const v = c[p]; return typeof v === "function" ? v.bind(c) : v } })
 
 async function convertWebmToOgg(webmBuffer: Buffer): Promise<Buffer> {
   const ffmpegPath = require("ffmpeg-static") as string

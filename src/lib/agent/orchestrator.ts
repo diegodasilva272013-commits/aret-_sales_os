@@ -106,13 +106,17 @@ export async function runAgentCycle(): Promise<{ processed: number; errors: numb
 
 /** Process all pending actions for one organization */
 async function processOrganization(config: AgentConfig): Promise<{ processed: number; errors: number }> {
-  // Check if within active hours
+  // Check if within active hours (Argentina UTC-3)
   const now = new Date()
-  const currentHour = now.getUTCHours() - 3 // Argentina timezone (UTC-3)
+  const currentHour = ((now.getUTCHours() - 3) % 24 + 24) % 24 // Safe modulo for negative
   const currentDay = now.getDay()
 
   if (!config.active_days.includes(currentDay)) return { processed: 0, errors: 0 }
-  if (currentHour < config.active_hours_start || currentHour >= config.active_hours_end) return { processed: 0, errors: 0 }
+  
+  // Handle active_hours_end=0 as 24 (midnight), and skip check if start==end (always active)
+  const start = config.active_hours_start
+  const end = config.active_hours_end === 0 ? 24 : config.active_hours_end
+  if (start !== end && (currentHour < start || currentHour >= end)) return { processed: 0, errors: 0 }
 
   // Get active accounts with remaining capacity
   const { data: accounts } = await supabase

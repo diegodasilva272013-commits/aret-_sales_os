@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAgentScope } from "@/lib/agent-auth"
-import { validateSession } from "@/lib/agent/linkedin"
+import { validateSessionDetailed } from "@/lib/agent/linkedin"
 
 export async function POST(req: NextRequest) {
   const scope = await getAgentScope()
@@ -34,27 +34,32 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const valid = await validateSession({
+    const result = await validateSessionDetailed({
       sessionCookie: account.session_cookie,
       accountId: account.id,
     })
 
-    // Update account status based on validation
-    await scope.supabase
-      .from("agent_linkedin_accounts")
-      .update({ status: valid ? "active" : "disconnected", last_action_at: new Date().toISOString() })
-      .eq("id", accountId)
+    // Only update to active if valid. NEVER mark as disconnected from validate button
+    // (the user might just have a temporary network issue)
+    if (result.valid) {
+      await scope.supabase
+        .from("agent_linkedin_accounts")
+        .update({ status: "active", last_action_at: new Date().toISOString() })
+        .eq("id", accountId)
+    }
 
     return NextResponse.json({
-      valid,
-      message: valid
-        ? "Cookie válida — cuenta conectada correctamente"
-        : "Cookie inválida o expirada — iniciá sesión en LinkedIn y copiá la cookie li_at de nuevo",
+      valid: result.valid,
+      detail: result.detail,
+      message: result.valid
+        ? `✅ Cookie válida — ${result.detail}`
+        : `❌ Cookie inválida (${result.detail}) — Asegurate de estar logueado en LinkedIn y copiá la cookie li_at de nuevo`,
     })
   } catch (e) {
     return NextResponse.json({
       valid: false,
-      message: `Error al validar: ${String(e)}`,
+      detail: String(e),
+      message: `❌ Error al validar: ${String(e)}`,
     })
   }
 }

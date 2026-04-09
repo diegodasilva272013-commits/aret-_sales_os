@@ -91,7 +91,7 @@ export default function AgentSettingsPage() {
 
   const show = (msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 4000)
+    setTimeout(() => setToast(null), 6000)
   }
 
   /* ─── fetch all ─────────────────────────────────────── */
@@ -195,13 +195,13 @@ export default function AgentSettingsPage() {
       })
       const d = await res.json()
       if (d.valid) {
-        show("Cookie VÁLIDA — La cuenta está conectada a LinkedIn", "ok")
+        show(d.message || "✅ Cookie VÁLIDA — cuenta conectada", "ok")
       } else {
-        show(d.message || "Cookie INVÁLIDA — Necesitás renovar la cookie li_at", "err")
+        show(d.message || "❌ Cookie INVÁLIDA", "err")
       }
       fetchAll()
     } catch {
-      show("Error al validar", "err")
+      show("Error de red al validar", "err")
     }
     setValidating(null)
   }
@@ -220,10 +220,12 @@ export default function AgentSettingsPage() {
         body: JSON.stringify({ accountId, session_cookie: newCookie.trim() }),
       })
       if (res.ok) {
-        show("Cookie actualizada — ahora validá que funcione", "ok")
+        show("Cookie guardada — validando...", "ok")
         setEditingCookie(null)
         setNewCookie("")
         fetchAll()
+        // Auto-validate after saving
+        setTimeout(() => validateAccount(accountId), 500)
       } else {
         const d = await res.json()
         show(d.error || "Error al actualizar", "err")
@@ -539,21 +541,34 @@ export default function AgentSettingsPage() {
 
                     {/* Inline cookie update form */}
                     {editingCookie === acc.id && (
-                      <div className="mt-3 p-3 rounded-lg space-y-2" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-                        <p className="text-[11px] font-semibold" style={{ color: "var(--text-secondary)" }}>
-                          Pegá tu nueva cookie li_at:
+                      <div className="mt-3 p-4 rounded-lg space-y-3" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                        <p className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>
+                          📋 Cómo obtener tu cookie li_at:
                         </p>
-                        <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
-                          Chrome → F12 → Application → Cookies → linkedin.com → copiá el valor de &quot;li_at&quot;
-                        </p>
+                        <ol className="text-[11px] space-y-1 list-decimal list-inside" style={{ color: "var(--text-muted)" }}>
+                          <li>Abrí <a href="https://www.linkedin.com" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--accent)" }}>linkedin.com</a> y asegurate de estar <b>logueado</b></li>
+                          <li>Presioná <b>F12</b> (o clic derecho → Inspeccionar)</li>
+                          <li>Andá a la pestaña <b>Application</b> (o Aplicación)</li>
+                          <li>En el panel izquierdo: <b>Cookies</b> → <b>https://www.linkedin.com</b></li>
+                          <li>Buscá la cookie <b>li_at</b> y hacé <b>doble clic en el valor</b></li>
+                          <li>Copiá TODO el valor (Ctrl+C) y pegalo acá abajo</li>
+                        </ol>
+                        <div className="p-2 rounded text-[10px]" style={{ background: "rgba(245,158,11,0.1)", color: "#f59e0b" }}>
+                          ⚠️ Importante: Copiá el valor COMPLETO (empieza con AQED... y tiene ~200+ caracteres)
+                        </div>
                         <input
                           value={newCookie}
                           onChange={e => setNewCookie(e.target.value)}
                           placeholder="AQEDARhN..."
-                          type="password"
-                          className="w-full px-3 py-2 rounded-lg text-sm"
+                          type="text"
+                          className="w-full px-3 py-2 rounded-lg text-sm font-mono"
                           style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
                         />
+                        {newCookie && (
+                          <p className="text-[10px]" style={{ color: newCookie.length > 100 && newCookie.startsWith("AQED") ? "#22c55e" : "#ef4444" }}>
+                            {newCookie.length} caracteres {newCookie.startsWith("AQED") ? "✓ formato correcto" : "✗ debe empezar con AQED"}
+                          </p>
+                        )}
                         <div className="flex gap-2">
                           <button
                             onClick={() => updateCookie(acc.id)}
@@ -561,7 +576,7 @@ export default function AgentSettingsPage() {
                             className="px-4 py-2 rounded-lg text-xs font-bold transition-all"
                             style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "#fff", opacity: updatingCookie || !newCookie.trim() ? 0.5 : 1 }}
                           >
-                            {updatingCookie ? "Guardando..." : "💾 Guardar Cookie"}
+                            {updatingCookie ? "Guardando y validando..." : "💾 Guardar y Validar"}
                           </button>
                           <button
                             onClick={() => { setEditingCookie(null); setNewCookie("") }}
@@ -810,15 +825,15 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
                     <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
                       {ACTION_LABELS[actionType] || actionType}
                     </p>
-                    {log.action_detail && (
+                    {log.action_detail ? (
                       <p className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>{String(log.action_detail)}</p>
-                    )}
-                    {log.generated_content && (
+                    ) : null}
+                    {log.generated_content ? (
                       <p className="text-[10px] truncate mt-0.5 italic" style={{ color: "var(--text-secondary)" }}>&quot;{String(log.generated_content).slice(0, 100)}&quot;</p>
-                    )}
-                    {log.error_message && (
+                    ) : null}
+                    {log.error_message ? (
                       <p className="text-[10px] mt-0.5" style={{ color: "#ef4444" }}>Error: {String(log.error_message)}</p>
-                    )}
+                    ) : null}
                   </div>
                   <div className="text-[10px] shrink-0" style={{ color: "var(--text-muted)" }}>
                     {log.executed_at ? new Date(String(log.executed_at)).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""}

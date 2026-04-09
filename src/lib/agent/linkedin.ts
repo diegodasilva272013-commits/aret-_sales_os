@@ -69,12 +69,14 @@ export async function viewProfile(
 ): Promise<{ success: boolean; profileData?: Record<string, unknown>; error?: string }> {
   try {
     const res = await fetch(
-      `${LI_BASE}/voyager/api/identity/profiles/${encodeURIComponent(publicId)}`,
+      `${LI_BASE}/voyager/api/identity/dash/profiles?q=memberIdentity&memberIdentity=${encodeURIComponent(publicId)}`,
       { headers: headers(session) }
     )
     if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
     const data = await res.json()
-    return { success: true, profileData: data }
+    // Profile data is in the included array
+    const profile = data?.included?.[0] || data
+    return { success: true, profileData: profile }
   } catch (e) {
     return { success: false, error: String(e) }
   }

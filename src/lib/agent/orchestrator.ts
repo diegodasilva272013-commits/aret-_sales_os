@@ -347,11 +347,19 @@ async function processItem(
 
   switch (item.status) {
     case "discovered": {
-      // View profile → move to warming
+      // View profile → try to get posts for engagement, then advance
       const result = await linkedin.viewProfile(session, publicId)
       await logAction(item, account.id, "profile_view", result.success, result.error)
       if (result.success) {
-        await advanceStatus(item, "warming")
+        // Try to get posts for warming/commenting phases
+        const posts = await linkedin.getProfilePosts(session, publicId, 3)
+        if (posts.success && posts.posts?.length) {
+          // Posts available → go through warming phase
+          await advanceStatus(item, "warming")
+        } else {
+          // No posts available → skip warming/commenting, go to connecting
+          await advanceStatus(item, "connecting")
+        }
       }
       return result.success
     }
@@ -370,6 +378,10 @@ async function processItem(
           await logAction(item, account.id, "post_like", result.success, result.error)
           await updateNextAction(item, config)
           return result.success
+        } else {
+          // Posts API unavailable — skip to connecting
+          await advanceStatus(item, "connecting")
+          return true
         }
       }
       return false
@@ -400,6 +412,10 @@ async function processItem(
           }
           await updateNextAction(item, config)
           return result.success
+        } else {
+          // Posts API unavailable — skip to connecting
+          await advanceStatus(item, "connecting")
+          return true
         }
       }
       return false

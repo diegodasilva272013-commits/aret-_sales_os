@@ -570,11 +570,14 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
     setRunResult(null)
     try {
       const res = await fetch("/api/agent/run", { method: "POST" })
-      const d = await res.json()
+      const text = await res.text()
+      let d: Record<string, unknown> = {}
+      try { d = JSON.parse(text) } catch { d = { raw: text } }
+      
       if (!res.ok) {
-        setRunResult(`❌ ${d.error || "Error"}`)
+        setRunResult(`❌ [${res.status}] ${d.error || d.raw || text.slice(0, 200)}`)
       } else {
-        setRunResult(`✅ Procesados: ${d.processed}, Errores: ${d.errors}`)
+        setRunResult(`✅ Procesados: ${(d as { processed?: number }).processed ?? 0}, Errores: ${(d as { errors?: number }).errors ?? 0}`)
         onRefresh()
         // Refresh logs
         const logsRes = await fetch("/api/agent/logs?limit=20")
@@ -588,8 +591,8 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
           setStats(qd.stats || {})
         }
       }
-    } catch {
-      setRunResult("❌ Error de red")
+    } catch (err) {
+      setRunResult(`❌ Error de red: ${String(err)}`)
     }
     setRunning(false)
   }

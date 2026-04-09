@@ -178,22 +178,12 @@ export async function searchPeople(
   }
 ): Promise<{ success: boolean; results?: Array<{ publicId: string; fullName: string; headline: string; company: string; location: string; profileUrn: string }>; error?: string }> {
   try {
-    // Build the query filter list
-    const filters: string[] = [`resultType->${encodeURIComponent("PEOPLE")}`]
-
-    if (params.industries?.length) {
-      filters.push(`industry->${params.industries.map(i => encodeURIComponent(i)).join("|")}`)
-    }
-    if (params.locations?.length) {
-      filters.push(`geoUrn->${params.locations.map(l => encodeURIComponent(l)).join("|")}`)
-    }
-
-    const keywords = encodeURIComponent(params.keywords || "")
+    const keywords = params.keywords || ""
     const start = params.start || 0
-    const count = params.count || 10
 
-    // Use REST search endpoint — more stable than GraphQL variant
-    const url = `${LI_BASE}/voyager/api/search/dash/clusters?decorationId=com.linkedin.voyager.dash.deco.search.SearchClusterCollection-175&origin=GLOBAL_SEARCH_HEADER&q=all&query=(keywords:${keywords},filterClauses:List(${filters.map(f => `(config:List(${f}),type:PLATFORM_FILTER)`).join(",")}))&start=${start}&count=${count}`
+    // Use GraphQL endpoint — the REST dash/clusters endpoint returns 500
+    const vars = `(start:${start},origin:GLOBAL_SEARCH_HEADER,query:(keywords:${encodeURIComponent(keywords)},flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE)))))`
+    const url = `${LI_BASE}/voyager/api/graphql?variables=${vars}&queryId=voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0`
 
     const res = await fetch(url, {
       headers: headers(session),
@@ -206,37 +196,37 @@ export async function searchPeople(
     const data = await res.json()
     const results: Array<{ publicId: string; fullName: string; headline: string; company: string; location: string; profileUrn: string }> = []
 
-    // Parse LinkedIn's nested response structure
     const included = data?.included || []
+
+    // Primary: EntityResultViewModel items have navigationUrl with /in/publicId and title.text
     for (const item of included) {
-      if (item.$type === "com.linkedin.voyager.dash.identity.profile.Profile" || item.publicIdentifier) {
-        results.push({
-          publicId: item.publicIdentifier || "",
-          fullName: `${item.firstName || ""} ${item.lastName || ""}`.trim(),
-          headline: item.headline || "",
-          company: item.companyName || "",
-          location: item.geoLocation || item.location || "",
-          profileUrn: item.entityUrn || "",
-        })
+      if (item.navigationUrl && item.navigationUrl.includes("/in/")) {
+        const match = item.navigationUrl.match(/\/in\/([^/?]+)/)
+        if (match) {
+          results.push({
+            publicId: match[1],
+            fullName: item.title?.text || "",
+            headline: item.primarySubtitle?.text || "",
+            company: item.secondarySubtitle?.text || "",
+            location: item.summary?.text || "",
+            profileUrn: item.entityUrn || item["*entityUrn"] || "",
+          })
+        }
       }
     }
 
-    // Fallback: also check for mini profiles in case response uses different structure
+    // Fallback: Profile type items in included
     if (results.length === 0) {
       for (const item of included) {
-        if (item.$type?.includes("MiniProfile") || item.$type?.includes("EntityResult")) {
-          const title = item.title?.text || item.name?.text || ""
-          const pid = item.publicIdentifier || item.navigationUrl?.match(/\/in\/([^/?]+)/)?.[1] || ""
-          if (pid || title) {
-            results.push({
-              publicId: pid,
-              fullName: title,
-              headline: item.primarySubtitle?.text || item.headline?.text || item.headline || "",
-              company: item.secondarySubtitle?.text || "",
-              location: item.subline?.text || "",
-              profileUrn: item.entityUrn || item["*entityUrn"] || "",
-            })
-          }
+        if (item.$type?.includes("Profile") && (item.publicIdentifier || item.firstName)) {
+          results.push({
+            publicId: item.publicIdentifier || "",
+            fullName: `${item.firstName || ""} ${item.lastName || ""}`.trim(),
+            headline: item.headline || item.occupation || "",
+            company: "",
+            location: item.geoLocation || item.location || "",
+            profileUrn: item.entityUrn || "",
+          })
         }
       }
     }

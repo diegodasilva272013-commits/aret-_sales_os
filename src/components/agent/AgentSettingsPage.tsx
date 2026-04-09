@@ -635,9 +635,11 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
 
   const totalQueue = Object.values(stats).reduce((a, b) => a + b, 0)
   const activeAccounts = accounts.filter(a => a.status === "active").length
+  const warmingAccounts = accounts.filter(a => a.status === "warming").length
   const hasConfig = !!(cfg.icp_industries && cfg.icp_industries.length > 0)
   const isActive = cfg.is_active
-  const hasIssues = !hasConfig || activeAccounts === 0
+  const hasWorkingAccounts = activeAccounts > 0 || warmingAccounts > 0
+  const hasIssues = !hasConfig || !hasWorkingAccounts
 
   const toggleAgent = async () => {
     setToggling(true)
@@ -720,25 +722,23 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
               background: isActive && !hasIssues ? "#22c55e" : hasIssues ? "#f59e0b" : "#6b7280",
             }} />
             <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
-              {isActive && !hasIssues ? "Agente ACTIVO — Prospectando" : hasIssues ? "Agente necesita configuración" : "Agente INACTIVO"}
+              {isActive && !hasIssues ? "Agente ACTIVO — Prospectando" : !hasConfig ? "Falta configurar ICP" : !hasWorkingAccounts ? "Falta validar cookie LinkedIn" : !isActive ? "Agente INACTIVO" : "Agente necesita configuración"}
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            {isActive && (
-              <button
-                onClick={runNow}
-                disabled={running || !isActive}
-                className="px-4 py-2.5 rounded-xl text-sm font-bold transition-all"
-                style={{
-                  background: "linear-gradient(135deg, #3b82f6, #2563eb)",
-                  color: "#fff",
-                  opacity: running ? 0.6 : 1,
-                  boxShadow: "0 4px 15px rgba(59,130,246,0.3)",
-                }}
-              >
-                {running ? "⏳ Ejecutando..." : "🚀 Ejecutar Ahora"}
-              </button>
-            )}
+            <button
+              onClick={runNow}
+              disabled={running}
+              className="px-4 py-2.5 rounded-xl text-sm font-bold transition-all"
+              style={{
+                background: "linear-gradient(135deg, #3b82f6, #2563eb)",
+                color: "#fff",
+                opacity: running ? 0.6 : 1,
+                boxShadow: "0 4px 15px rgba(59,130,246,0.3)",
+              }}
+            >
+              {running ? "⏳ Ejecutando..." : "🚀 Ejecutar Ahora"}
+            </button>
             <button
               onClick={toggleAgent}
               disabled={toggling}
@@ -769,7 +769,7 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
         {/* Checklist */}
         <div className="space-y-2 ml-7">
           <CheckItem ok={hasConfig} label="ICP configurado (industrias, roles, etc.)" />
-          <CheckItem ok={activeAccounts > 0} label={`${activeAccounts} cuenta(s) LinkedIn activa(s)`} />
+          <CheckItem ok={hasWorkingAccounts} label={hasWorkingAccounts ? `${activeAccounts + warmingAccounts} cuenta(s) conectada(s)` : `0 cuentas activas — validá tu cookie en la pestaña Cuentas`} />
           <CheckItem ok={!!isActive} label="Agente activado" />
           <CheckItem ok={totalQueue > 0} label={`${totalQueue} prospectos en pipeline`} />
         </div>

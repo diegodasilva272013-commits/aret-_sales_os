@@ -139,12 +139,12 @@ async function processOrganization(config: AgentConfig, debug: string[]): Promis
 
   debug.push("Hours OK, fetching accounts...")
 
-  // Get active accounts with remaining capacity
+  // Get all accounts that have a session cookie (let validation decide if they work)
   const { data: accounts, error: accError } = await supabase
     .from("agent_linkedin_accounts")
     .select("*")
     .eq("organization_id", config.organization_id)
-    .in("status", ["active", "warming"])
+    .not("status", "eq", "banned")
 
   if (accError) {
     debug.push(`DB error fetching accounts: ${accError.message}`)
@@ -176,10 +176,8 @@ async function processOrganization(config: AgentConfig, debug: string[]): Promis
     const sessionInfo = await linkedin.validateSessionDetailed(session)
     if (!sessionInfo.valid) {
       debug.push(`FAIL: session invalid for ${account.account_name}: ${sessionInfo.detail}`)
-      await supabase
-        .from("agent_linkedin_accounts")
-        .update({ status: "disconnected" })
-        .eq("id", account.id)
+      // Do NOT mark as disconnected here — let the user manage account status manually
+      // via the validate button. The orchestrator just skips invalid sessions.
       continue
     }
 

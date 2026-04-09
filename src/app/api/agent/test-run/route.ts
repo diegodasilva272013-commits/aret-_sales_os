@@ -70,22 +70,111 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ debug })
     }
 
-    // 5. Try LinkedIn search
-    const keywords = [...(config.icp_keywords || []), ...(config.icp_roles || [])].filter(Boolean)
-    const searchKeyword = keywords.slice(0, 3).join(" ") || "gerente hotel"
-    debug.push(`Searching LinkedIn for: "${searchKeyword}"`)
+    // 5. Try multiple LinkedIn search URL formats
+    const searchKeyword = "gerente hotel"
+    const encodedKw = encodeURIComponent(searchKeyword)
 
-    const searchResult = await linkedin.searchPeople(session, {
-      keywords: searchKeyword,
-      count: 5,
-    })
-    debug.push(`Search: success=${searchResult.success}, results=${searchResult.results?.length ?? 0}, error=${searchResult.error || 'none'}`)
-
-    if (searchResult.results?.length) {
-      for (const p of searchResult.results.slice(0, 3)) {
-        debug.push(`  → ${p.fullName} | ${p.headline} | ${p.company}`)
+    // Format A: typeahead (simplest)
+    debug.push("--- Search Format A: typeahead ---")
+    try {
+      const rA = await fetch(`https://www.linkedin.com/voyager/api/typeahead/hitsV2?keywords=${encodedKw}&origin=GLOBAL_SEARCH_HEADER&q=blended&type=PEOPLE`, {
+        headers: {
+          "Cookie": `li_at=${account.session_cookie}; JSESSIONID="ajax:0"`,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          "Accept": "application/vnd.linkedin.normalized+json+2.1",
+          "X-Li-Lang": "es_ES",
+          "X-Restli-Protocol-Version": "2.0.0",
+          "Csrf-Token": "ajax:0",
+        },
+        redirect: "manual",
+      })
+      debug.push(`  Status: ${rA.status}`)
+      if (rA.status === 200) {
+        const d = await rA.json()
+        const elements = d?.elements || []
+        debug.push(`  Elements: ${elements.length}`)
+        for (const el of elements.slice(0, 2)) {
+          debug.push(`  → ${el?.text?.text || el?.title?.text || JSON.stringify(el).slice(0, 100)}`)
+        }
       }
-    }
+    } catch (e) { debug.push(`  Error: ${String(e)}`) }
+
+    // Format B: search/blended 
+    debug.push("--- Search Format B: search/blended ---")
+    try {
+      const rB = await fetch(`https://www.linkedin.com/voyager/api/search/blended?keywords=${encodedKw}&origin=GLOBAL_SEARCH_HEADER&q=all&filters=List(resultType-%3EPEOPLE)&count=10&start=0`, {
+        headers: {
+          "Cookie": `li_at=${account.session_cookie}; JSESSIONID="ajax:0"`,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          "Accept": "application/vnd.linkedin.normalized+json+2.1",
+          "X-Li-Lang": "es_ES",
+          "X-Restli-Protocol-Version": "2.0.0",
+          "Csrf-Token": "ajax:0",
+        },
+        redirect: "manual",
+      })
+      debug.push(`  Status: ${rB.status}`)
+      if (rB.status === 200) {
+        const d = await rB.json()
+        const included = d?.included || []
+        debug.push(`  Included items: ${included.length}`)
+        for (const it of included.slice(0, 2)) {
+          debug.push(`  → type=${it.$type}, name=${it.firstName || it.publicIdentifier || '?'}`)
+        }
+      }
+    } catch (e) { debug.push(`  Error: ${String(e)}`) }
+
+    // Format C: graphql with updated queryId
+    debug.push("--- Search Format C: graphql ---")
+    try {
+      const rC = await fetch(`https://www.linkedin.com/voyager/api/graphql?variables=(start:0,origin:GLOBAL_SEARCH_HEADER,query:(keywords:${encodedKw},flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE))),includeFiltersInResponse:false))&queryId=voyagerSearchDashClusters.66cf6e86bb2bba425e3bef87df34d4f8`, {
+        headers: {
+          "Cookie": `li_at=${account.session_cookie}; JSESSIONID="ajax:0"`,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          "Accept": "application/vnd.linkedin.normalized+json+2.1",
+          "X-Li-Lang": "es_ES",
+          "X-Restli-Protocol-Version": "2.0.0",
+          "Csrf-Token": "ajax:0",
+        },
+        redirect: "manual",
+      })
+      debug.push(`  Status: ${rC.status}`)
+      if (rC.status === 200) {
+        const d = await rC.json()
+        const included = d?.included || []
+        debug.push(`  Included items: ${included.length}`)
+        for (const it of included.filter((x: Record<string, unknown>) => (x as Record<string, string>).publicIdentifier).slice(0, 2)) {
+          debug.push(`  → ${(it as Record<string, string>).firstName} ${(it as Record<string, string>).lastName} (${(it as Record<string, string>).publicIdentifier})`)
+        }
+      }
+    } catch (e) { debug.push(`  Error: ${String(e)}`) }
+
+    // Format D: dash/clusters REST (simpler, no filterClauses)
+    debug.push("--- Search Format D: dash/clusters simple ---")
+    try {
+      const rD = await fetch(`https://www.linkedin.com/voyager/api/search/dash/clusters?decorationId=com.linkedin.voyager.dash.deco.search.SearchClusterCollection-175&origin=GLOBAL_SEARCH_HEADER&q=all&query=(keywords:${encodedKw},flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE))))&start=0&count=10`, {
+        headers: {
+          "Cookie": `li_at=${account.session_cookie}; JSESSIONID="ajax:0"`,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          "Accept": "application/vnd.linkedin.normalized+json+2.1",
+          "X-Li-Lang": "es_ES",
+          "X-Restli-Protocol-Version": "2.0.0",
+          "Csrf-Token": "ajax:0",
+        },
+        redirect: "manual",
+      })
+      debug.push(`  Status: ${rD.status}`)
+      if (rD.status === 200) {
+        const d = await rD.json()
+        const included = d?.included || []
+        debug.push(`  Included items: ${included.length}`)
+        const profiles = included.filter((x: Record<string, unknown>) => (x as Record<string, string>).publicIdentifier)
+        debug.push(`  Profiles found: ${profiles.length}`)
+        for (const it of profiles.slice(0, 3)) {
+          debug.push(`  → ${(it as Record<string, string>).firstName} ${(it as Record<string, string>).lastName} | ${(it as Record<string, string>).headline || ''}`)
+        }
+      }
+    } catch (e) { debug.push(`  Error: ${String(e)}`) }
 
     // 6. Check queue
     const { count } = await supabase

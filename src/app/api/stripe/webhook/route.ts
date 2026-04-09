@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server"
 import Stripe from "stripe"
 import { PLANS } from "@/lib/plans"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-03-25.dahlia" })
+let _stripe: Stripe
+const stripe = new Proxy({} as Stripe, { get(_, p: string) { const c = _stripe ??= new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2026-03-25.dahlia" }); const v = (c as any)[p]; return typeof v === "function" ? v.bind(c) : v } })
 
 const PLAN_LIMITS: Record<string, { plan: string; plan_limit: number; search_limit: number }> = {
   [process.env.STRIPE_PRICE_STARTER!]: { plan: "starter", plan_limit: PLANS.starter.analysesPerMonth, search_limit: PLANS.starter.searchLimit },

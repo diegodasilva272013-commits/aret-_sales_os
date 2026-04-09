@@ -84,6 +84,11 @@ export default function AgentSettingsPage() {
   const [form, setForm] = useState({ account_name: "", linkedin_email: "", session_cookie: "" })
   const [addSaving, setAddSaving] = useState(false)
 
+  // update cookie
+  const [editingCookie, setEditingCookie] = useState<string | null>(null)
+  const [newCookie, setNewCookie] = useState("")
+  const [updatingCookie, setUpdatingCookie] = useState(false)
+
   const show = (msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 4000)
@@ -199,6 +204,34 @@ export default function AgentSettingsPage() {
       show("Error al validar", "err")
     }
     setValidating(null)
+  }
+
+  /* ─── update cookie ─────────────────────────────────── */
+  const updateCookie = async (accountId: string) => {
+    if (!newCookie.trim()) {
+      show("Pegá la cookie li_at primero", "err")
+      return
+    }
+    setUpdatingCookie(true)
+    try {
+      const res = await fetch("/api/agent/accounts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId, session_cookie: newCookie.trim() }),
+      })
+      if (res.ok) {
+        show("Cookie actualizada — ahora validá que funcione", "ok")
+        setEditingCookie(null)
+        setNewCookie("")
+        fetchAll()
+      } else {
+        const d = await res.json()
+        show(d.error || "Error al actualizar", "err")
+      }
+    } catch (e) {
+      show("Error: " + String(e), "err")
+    }
+    setUpdatingCookie(false)
   }
 
   /* ─── helpers ───────────────────────────────────────── */
@@ -379,7 +412,7 @@ export default function AgentSettingsPage() {
                   <div>
                     <label className="text-xs font-semibold block mb-1" style={{ color: "var(--text-secondary)" }}>Hora fin</label>
                     <select value={cfg.active_hours_end ?? 18} onChange={e => set("active_hours_end", parseInt(e.target.value))} className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
-                      {Array.from({ length: 24 }, (_, i) => (<option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>))}
+                      {Array.from({ length: 23 }, (_, i) => (<option key={i + 1} value={i + 1}>{String(i + 1).padStart(2, "0")}:00</option>))}
                     </select>
                   </div>
                 </div>
@@ -487,6 +520,11 @@ export default function AgentSettingsPage() {
                         {acc.last_action_at && <span>Última acción: {new Date(acc.last_action_at).toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" })}</span>}
                       </div>
                       <div className="flex items-center gap-2">
+                        <button onClick={() => { setEditingCookie(editingCookie === acc.id ? null : acc.id); setNewCookie("") }}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+                          style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>
+                          🔄 Actualizar Cookie
+                        </button>
                         <button onClick={() => validateAccount(acc.id)} disabled={validating === acc.id}
                           className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
                           style={{ background: "rgba(0,119,181,0.12)", color: "#0077b5", opacity: validating === acc.id ? 0.5 : 1 }}>
@@ -498,6 +536,43 @@ export default function AgentSettingsPage() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Inline cookie update form */}
+                    {editingCookie === acc.id && (
+                      <div className="mt-3 p-3 rounded-lg space-y-2" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                        <p className="text-[11px] font-semibold" style={{ color: "var(--text-secondary)" }}>
+                          Pegá tu nueva cookie li_at:
+                        </p>
+                        <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                          Chrome → F12 → Application → Cookies → linkedin.com → copiá el valor de &quot;li_at&quot;
+                        </p>
+                        <input
+                          value={newCookie}
+                          onChange={e => setNewCookie(e.target.value)}
+                          placeholder="AQEDARhN..."
+                          type="password"
+                          className="w-full px-3 py-2 rounded-lg text-sm"
+                          style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => updateCookie(acc.id)}
+                            disabled={updatingCookie || !newCookie.trim()}
+                            className="px-4 py-2 rounded-lg text-xs font-bold transition-all"
+                            style={{ background: "linear-gradient(135deg, #22c55e, #16a34a)", color: "#fff", opacity: updatingCookie || !newCookie.trim() ? 0.5 : 1 }}
+                          >
+                            {updatingCookie ? "Guardando..." : "💾 Guardar Cookie"}
+                          </button>
+                          <button
+                            onClick={() => { setEditingCookie(null); setNewCookie("") }}
+                            className="px-4 py-2 rounded-lg text-xs font-semibold"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}

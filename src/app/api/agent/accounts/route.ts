@@ -84,3 +84,25 @@ export async function DELETE(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
 }
+
+/** PATCH — Update session cookie for existing account */
+export async function PATCH(req: NextRequest) {
+  const scope = await getAgentScope()
+  if (scope.error) return scope.error
+
+  const { accountId, session_cookie } = await req.json()
+  if (!accountId || !session_cookie) {
+    return NextResponse.json({ error: "accountId y session_cookie son requeridos" }, { status: 400 })
+  }
+
+  const { data, error } = await scope.supabase
+    .from("agent_linkedin_accounts")
+    .update({ session_cookie, status: "active" })
+    .eq("id", accountId)
+    .eq("organization_id", scope.organizationId)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ account: data })
+}

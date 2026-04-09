@@ -574,10 +574,14 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
       let d: Record<string, unknown> = {}
       try { d = JSON.parse(text) } catch { d = { raw: text } }
       
+      const debugLines = Array.isArray(d.debug) ? (d.debug as string[]).join("\n→ ") : ""
+      
       if (!res.ok) {
-        setRunResult(`❌ [${res.status}] ${d.error || d.raw || text.slice(0, 200)}`)
+        setRunResult(`❌ [${res.status}] ${d.error || d.raw || text.slice(0, 200)}${debugLines ? "\n→ " + debugLines : ""}`)
       } else {
-        setRunResult(`✅ Procesados: ${(d as { processed?: number }).processed ?? 0}, Errores: ${(d as { errors?: number }).errors ?? 0}`)
+        const proc = (d as { processed?: number }).processed ?? 0
+        const errs = (d as { errors?: number }).errors ?? 0
+        setRunResult(`✅ Procesados: ${proc}, Errores: ${errs}${debugLines ? "\n→ " + debugLines : ""}`)
         onRefresh()
         // Refresh logs
         const logsRes = await fetch("/api/agent/logs?limit=20")
@@ -667,9 +671,9 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
 
         {/* Run Result */}
         {runResult && (
-          <p className="text-xs font-medium ml-7 mt-2" style={{ color: runResult.startsWith("✅") ? "#22c55e" : "#ef4444" }}>
+          <pre className="text-xs font-medium ml-7 mt-2 whitespace-pre-wrap" style={{ color: runResult.startsWith("✅") ? "#22c55e" : "#ef4444" }}>
             {runResult}
-          </p>
+          </pre>
         )}
 
         {/* Checklist */}

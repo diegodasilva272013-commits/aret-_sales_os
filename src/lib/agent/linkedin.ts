@@ -30,8 +30,13 @@ function delay(minMs: number, maxMs: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms))
 }
 
-/** Check if session cookie is still valid */
+/** Check if session cookie is still valid. Returns { valid, detail } for debug info. */
 export async function validateSession(session: LinkedInSession): Promise<boolean> {
+  const info = await validateSessionDetailed(session)
+  return info.valid
+}
+
+export async function validateSessionDetailed(session: LinkedInSession): Promise<{ valid: boolean; detail: string }> {
   try {
     const res = await fetch(`${LI_BASE}/voyager/api/me`, {
       headers: headers(session),
@@ -39,13 +44,21 @@ export async function validateSession(session: LinkedInSession): Promise<boolean
     })
     // LinkedIn returns 200 for valid session, 401/403 for invalid,
     // or 3xx redirect to login for expired cookies
-    if (!res.ok) return false
+    if (!res.ok) return { valid: false, detail: `HTTP ${res.status} ${res.statusText}` }
     const text = await res.text()
     // If the response is empty or contains "login", the cookie is invalid
-    if (!text || text.includes("/uas/login")) return false
-    return true
-  } catch {
-    return false
+    if (!text) return { valid: false, detail: "Empty response body" }
+    if (text.includes("/uas/login")) return { valid: false, detail: "Response contains login redirect" }
+    // Try to extract profile info for logging
+    try {
+      const json = JSON.parse(text)
+      const name = json?.miniProfile?.firstName || json?.plainId || "ok"
+      return { valid: true, detail: `Session valid (${name})` }
+    } catch {
+      return { valid: true, detail: `Session valid (${text.length} bytes)` }
+    }
+  } catch (e) {
+    return { valid: false, detail: `Fetch error: ${String(e)}` }
   }
 }
 
@@ -165,21 +178,29 @@ export async function searchPeople(
   }
 ): Promise<{ success: boolean; results?: Array<{ publicId: string; fullName: string; headline: string; company: string; location: string; profileUrn: string }>; error?: string }> {
   try {
-    const searchParams = new URLSearchParams({
-      decorationId: "com.linkedin.voyager.dash.deco.search.SearchClusterCollection-175",
-      q: "all",
-      start: String(params.start || 0),
-      count: String(params.count || 10),
-      origin: "GLOBAL_SEARCH_HEADER",
+    // Build the query filter list
+    const filters: string[] = [`resultType->${encodeURIComponent("PEOPLE")}`]
+
+    if (params.industries?.length) {
+      filters.push(`industry->${params.industries.map(i => encodeURIComponent(i)).join("|")}`)
+    }
+    if (params.locations?.length) {
+      filters.push(`geoUrn->${params.locations.map(l => encodeURIComponent(l)).join("|")}`)
+    }
+
+    const keywords = encodeURIComponent(params.keywords || "")
+    const start = params.start || 0
+    const count = params.count || 10
+
+    // Use REST search endpoint — more stable than GraphQL variant
+    const url = `${LI_BASE}/voyager/api/search/dash/clusters?decorationId=com.linkedin.voyager.dash.deco.search.SearchClusterCollection-175&origin=GLOBAL_SEARCH_HEADER&q=all&query=(keywords:${keywords},filterClauses:List(${filters.map(f => `(config:List(${f}),type:PLATFORM_FILTER)`).join(",")}))&start=${start}&count=${count}`
+
+    const res = await fetch(url, {
+      headers: headers(session),
+      redirect: "manual",
     })
 
-    if (params.keywords) searchParams.set("keywords", params.keywords)
-
-    const res = await fetch(
-      `${LI_BASE}/voyager/api/graphql?variables=(${searchParams.toString()})&queryId=voyagerSearchDashClusters.bb251bf4a82e80e325e48b3e72a0301a`,
-      { headers: headers(session) }
-    )
-
+    if (res.status >= 300) return { success: false, error: `HTTP ${res.status} (redirect/error)` }
     if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
 
     const data = await res.json()
@@ -197,6 +218,26 @@ export async function searchPeople(
           location: item.geoLocation || item.location || "",
           profileUrn: item.entityUrn || "",
         })
+      }
+    }
+
+    // Fallback: also check for mini profiles in case response uses different structure
+    if (results.length === 0) {
+      for (const item of included) {
+        if (item.$type?.includes("MiniProfile") || item.$type?.includes("EntityResult")) {
+          const title = item.title?.text || item.name?.text || ""
+          const pid = item.publicIdentifier || item.navigationUrl?.match(/\/in\/([^/?]+)/)?.[1] || ""
+          if (pid || title) {
+            results.push({
+              publicId: pid,
+              fullName: title,
+              headline: item.primarySubtitle?.text || item.headline?.text || item.headline || "",
+              company: item.secondarySubtitle?.text || "",
+              location: item.subline?.text || "",
+              profileUrn: item.entityUrn || item["*entityUrn"] || "",
+            })
+          }
+        }
       }
     }
 

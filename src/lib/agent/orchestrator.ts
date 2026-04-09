@@ -78,60 +78,93 @@ const CRON_DELAY_MIN_MS = 3000  // 3 seconds
 const CRON_DELAY_MAX_MS = 8000  // 8 seconds
 
 /** Main entry point — called by Vercel Cron */
-export async function runAgentCycle(): Promise<{ processed: number; errors: number }> {
+export async function runAgentCycle(): Promise<{ processed: number; errors: number; debug?: string[] }> {
   let processed = 0
   let errors = 0
+  const debug: string[] = []
 
   // Get all active agent configs
-  const { data: configs } = await supabase
+  const { data: configs, error: cfgError } = await supabase
     .from("agent_config")
     .select("*")
     .eq("is_active", true)
 
-  if (!configs?.length) return { processed: 0, errors: 0 }
+  if (cfgError) {
+    debug.push(`DB error fetching configs: ${cfgError.message}`)
+    return { processed: 0, errors: 1, debug }
+  }
+
+  if (!configs?.length) {
+    debug.push("No active agent configs found")
+    return { processed: 0, errors: 0, debug }
+  }
+
+  debug.push(`Found ${configs.length} active config(s)`)
 
   for (const config of configs as AgentConfig[]) {
     try {
-      const result = await processOrganization(config)
+      const result = await processOrganization(config, debug)
       processed += result.processed
       errors += result.errors
     } catch (e) {
-      console.error(`Agent error for org ${config.organization_id}:`, e)
+      debug.push(`CRASH processing org ${config.organization_id}: ${String(e)}`)
       errors++
     }
   }
 
-  return { processed, errors }
+  return { processed, errors, debug }
 }
 
 /** Process all pending actions for one organization */
-async function processOrganization(config: AgentConfig): Promise<{ processed: number; errors: number }> {
+async function processOrganization(config: AgentConfig, debug: string[]): Promise<{ processed: number; errors: number }> {
   // Check if within active hours (Argentina UTC-3)
   const now = new Date()
   const currentHour = ((now.getUTCHours() - 3) % 24 + 24) % 24 // Safe modulo for negative
   const currentDay = now.getDay()
 
-  if (!config.active_days.includes(currentDay)) return { processed: 0, errors: 0 }
+  debug.push(`Time check: day=${currentDay} hour=${currentHour} (UTC ${now.getUTCHours()}), config: days=${JSON.stringify(config.active_days)} hours=${config.active_hours_start}-${config.active_hours_end}`)
+
+  if (!config.active_days.includes(currentDay)) {
+    debug.push(`SKIP: day ${currentDay} not in active_days`)
+    return { processed: 0, errors: 0 }
+  }
   
   // Handle active_hours_end=0 as 24 (midnight), and skip check if start==end (always active)
   const start = config.active_hours_start
   const end = config.active_hours_end === 0 ? 24 : config.active_hours_end
-  if (start !== end && (currentHour < start || currentHour >= end)) return { processed: 0, errors: 0 }
+  if (start !== end && (currentHour < start || currentHour >= end)) {
+    debug.push(`SKIP: hour ${currentHour} outside ${start}-${end}`)
+    return { processed: 0, errors: 0 }
+  }
+
+  debug.push("Hours OK, fetching accounts...")
 
   // Get active accounts with remaining capacity
-  const { data: accounts } = await supabase
+  const { data: accounts, error: accError } = await supabase
     .from("agent_linkedin_accounts")
     .select("*")
     .eq("organization_id", config.organization_id)
     .in("status", ["active", "warming"])
 
-  if (!accounts?.length) return { processed: 0, errors: 0 }
+  if (accError) {
+    debug.push(`DB error fetching accounts: ${accError.message}`)
+    return { processed: 0, errors: 1 }
+  }
 
+  if (!accounts?.length) {
+    debug.push("SKIP: no active/warming accounts")
+    return { processed: 0, errors: 0 }
+  }
+
+  debug.push(`Found ${accounts.length} account(s)`)
   let processed = 0
   let errors = 0
 
   for (const account of accounts as LinkedInAccount[]) {
-    if (!account.session_cookie) continue
+    if (!account.session_cookie) {
+      debug.push(`SKIP account ${account.account_name}: no session cookie`)
+      continue
+    }
 
     const session: linkedin.LinkedInSession = {
       sessionCookie: account.session_cookie,
@@ -139,8 +172,10 @@ async function processOrganization(config: AgentConfig): Promise<{ processed: nu
     }
 
     // Validate session is alive
-    const valid = await linkedin.validateSession(session)
-    if (!valid) {
+    debug.push(`Validating session for ${account.account_name}...`)
+    const sessionInfo = await linkedin.validateSessionDetailed(session)
+    if (!sessionInfo.valid) {
+      debug.push(`FAIL: session invalid for ${account.account_name}: ${sessionInfo.detail}`)
       await supabase
         .from("agent_linkedin_accounts")
         .update({ status: "disconnected" })
@@ -148,11 +183,13 @@ async function processOrganization(config: AgentConfig): Promise<{ processed: nu
       continue
     }
 
+    debug.push(`Session OK: ${sessionInfo.detail}`)
+
     // Phase 1: Discover new prospects if queue is low
     try {
-      await discoverProspects(config, account, session)
+      await discoverProspects(config, account, session, debug)
     } catch (e) {
-      console.error(`Discovery error for account ${account.id}:`, e)
+      debug.push(`Discovery error: ${String(e)}`)
     }
 
     // Phase 2: Process existing queue items
@@ -168,7 +205,8 @@ async function processOrganization(config: AgentConfig): Promise<{ processed: nu
 async function discoverProspects(
   config: AgentConfig,
   account: LinkedInAccount,
-  session: linkedin.LinkedInSession
+  session: linkedin.LinkedInSession,
+  debug: string[]
 ): Promise<void> {
   // Only discover if queue has fewer than 20 active items
   const { count } = await supabase
@@ -177,6 +215,7 @@ async function discoverProspects(
     .eq("organization_id", config.organization_id)
     .not("status", "in", '("converted","failed","skipped","paused","responded")')
 
+  debug.push(`Queue has ${count ?? 0} active items (max 20)`)
   if ((count ?? 0) >= 20) return
 
   // Build search keywords from ICP
@@ -185,10 +224,15 @@ async function discoverProspects(
     ...(config.icp_roles || []),
   ].filter(Boolean)
 
-  if (!keywords.length) return // No ICP configured, nothing to search
+  if (!keywords.length) {
+    debug.push("SKIP discovery: no ICP keywords or roles configured")
+    return
+  }
 
   // Search with first keyword combo
   const searchKeyword = keywords.slice(0, 3).join(" ")
+  debug.push(`Searching LinkedIn for: "${searchKeyword}"`)
+  
   const searchResult = await linkedin.searchPeople(session, {
     keywords: searchKeyword,
     industries: config.icp_industries,
@@ -196,6 +240,8 @@ async function discoverProspects(
     locations: config.icp_locations,
     count: 10,
   })
+
+  debug.push(`Search result: success=${searchResult.success}, results=${searchResult.results?.length ?? 0}, error=${searchResult.error || 'none'}`)
 
   if (!searchResult.success || !searchResult.results?.length) return
 

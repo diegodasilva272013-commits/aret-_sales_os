@@ -6,14 +6,23 @@
 // logs results, and advances prospects through the pipeline.
 // =====================================================
 
-import { createClient } from "@supabase/supabase-js"
+import { createClient, SupabaseClient } from "@supabase/supabase-js"
 import * as linkedin from "./linkedin"
 import * as ai from "./ai-content"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Lazy Supabase client — avoids crash during Vercel build (env vars not available)
+let _sb: SupabaseClient | null = null
+function getSB(): SupabaseClient {
+  if (!_sb) _sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  return _sb
+}
+const supabase = new Proxy({} as SupabaseClient, {
+  get(_, prop: string) {
+    const c = getSB()
+    const v = (c as any)[prop]
+    return typeof v === "function" ? v.bind(c) : v
+  },
+})
 
 interface AgentConfig {
   organization_id: string

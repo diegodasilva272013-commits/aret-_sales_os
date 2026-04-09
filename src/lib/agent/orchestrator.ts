@@ -145,6 +145,7 @@ async function processOrganization(config: AgentConfig, debug: string[]): Promis
     .select("*")
     .eq("organization_id", config.organization_id)
     .not("status", "eq", "banned")
+    .order("id")
 
   if (accError) {
     debug.push(`DB error fetching accounts: ${accError.message}`)

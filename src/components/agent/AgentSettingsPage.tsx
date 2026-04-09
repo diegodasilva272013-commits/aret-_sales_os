@@ -507,16 +507,17 @@ export default function AgentSettingsPage() {
       )}
 
       {/* ═══════════ TAB: STATUS ═══════════════════════════ */}
-      {tab === "status" && <AgentStatusPanel cfg={cfg} accounts={accounts} />}
+      {tab === "status" && <AgentStatusPanel cfg={cfg} accounts={accounts} onRefresh={fetchAll} />}
     </div>
   )
 }
 
 /* ─── Status Panel (sub-component) ───────────────────────── */
-function AgentStatusPanel({ cfg, accounts }: { cfg: AgentCfg; accounts: Account[] }) {
+function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; accounts: Account[]; onRefresh: () => void }) {
   const [logs, setLogs] = useState<Array<Record<string, unknown>>>([])
   const [stats, setStats] = useState<Record<string, number>>({})
   const [loadingLogs, setLoadingLogs] = useState(true)
+  const [toggling, setToggling] = useState(false)
 
   useEffect(() => {
     async function fetch_data() {
@@ -546,6 +547,22 @@ function AgentStatusPanel({ cfg, accounts }: { cfg: AgentCfg; accounts: Account[
   const isActive = cfg.is_active
   const hasIssues = !hasConfig || activeAccounts === 0
 
+  const toggleAgent = async () => {
+    setToggling(true)
+    try {
+      const endpoint = isActive ? "/api/agent/pause" : "/api/agent/start"
+      const res = await fetch(endpoint, { method: "POST" })
+      const d = await res.json()
+      if (!res.ok) {
+        alert(d.error || "Error al cambiar estado del agente")
+      }
+      onRefresh()
+    } catch {
+      alert("Error de red")
+    }
+    setToggling(false)
+  }
+
   const ACTION_LABELS: Record<string, string> = {
     profile_view: "Vista de perfil",
     post_like: "Like a post",
@@ -569,13 +586,32 @@ function AgentStatusPanel({ cfg, accounts }: { cfg: AgentCfg; accounts: Account[
             : "linear-gradient(135deg, rgba(107,114,128,0.15), rgba(107,114,128,0.05))",
         border: `1px solid ${isActive && !hasIssues ? "rgba(34,197,94,0.3)" : hasIssues ? "rgba(245,158,11,0.3)" : "rgba(107,114,128,0.3)"}`,
       }}>
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-4 h-4 rounded-full animate-pulse" style={{
-            background: isActive && !hasIssues ? "#22c55e" : hasIssues ? "#f59e0b" : "#6b7280",
-          }} />
-          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
-            {isActive && !hasIssues ? "Agente ACTIVO — Prospectando" : hasIssues ? "Agente necesita configuración" : "Agente INACTIVO"}
-          </h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded-full animate-pulse" style={{
+              background: isActive && !hasIssues ? "#22c55e" : hasIssues ? "#f59e0b" : "#6b7280",
+            }} />
+            <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
+              {isActive && !hasIssues ? "Agente ACTIVO — Prospectando" : hasIssues ? "Agente necesita configuración" : "Agente INACTIVO"}
+            </h2>
+          </div>
+          <button
+            onClick={toggleAgent}
+            disabled={toggling}
+            className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
+            style={{
+              background: isActive
+                ? "linear-gradient(135deg, #ef4444, #dc2626)"
+                : "linear-gradient(135deg, #22c55e, #16a34a)",
+              color: "#fff",
+              opacity: toggling ? 0.6 : 1,
+              boxShadow: isActive
+                ? "0 4px 15px rgba(239,68,68,0.3)"
+                : "0 4px 15px rgba(34,197,94,0.3)",
+            }}
+          >
+            {toggling ? "..." : isActive ? "⏸ Pausar Agente" : "▶ Activar Agente"}
+          </button>
         </div>
 
         {/* Checklist */}

@@ -73,9 +73,9 @@ interface QueueItem {
   next_action_at: string | null
 }
 
-/** Shorter delay for Vercel serverless (original 120-480s is too long for serverless timeout) */
-const CRON_DELAY_MIN_MS = 3000  // 3 seconds
-const CRON_DELAY_MAX_MS = 8000  // 8 seconds
+/** Shorter delay for Vercel serverless — but not too fast to avoid detection */
+const CRON_DELAY_MIN_MS = 5000  // 5 seconds
+const CRON_DELAY_MAX_MS = 12000  // 12 seconds
 
 /** Main entry point — called by Vercel Cron */
 export async function runAgentCycle(): Promise<{ processed: number; errors: number; debug?: string[] }> {
@@ -160,41 +160,43 @@ async function processOrganization(config: AgentConfig, debug: string[]): Promis
   let processed = 0
   let errors = 0
 
-  for (const account of accounts as LinkedInAccount[]) {
-    if (!account.session_cookie) {
-      debug.push(`SKIP account ${account.account_name}: no session cookie`)
-      continue
-    }
-
-    const session: linkedin.LinkedInSession = {
-      sessionCookie: account.session_cookie,
-      accountId: account.id,
-    }
-
-    // Validate session is alive
-    debug.push(`Validating session for ${account.account_name}...`)
-    const sessionInfo = await linkedin.validateSessionDetailed(session)
-    if (!sessionInfo.valid) {
-      debug.push(`FAIL: session invalid for ${account.account_name}: ${sessionInfo.detail}`)
-      // Do NOT mark as disconnected here — let the user manage account status manually
-      // via the validate button. The orchestrator just skips invalid sessions.
-      continue
-    }
-
-    debug.push(`Session OK: ${sessionInfo.detail}`)
-
-    // Phase 1: Discover new prospects if queue is low
-    try {
-      await discoverProspects(config, account, session, debug)
-    } catch (e) {
-      debug.push(`Discovery error: ${String(e)}`)
-    }
-
-    // Phase 2: Process existing queue items
-    const result = await processQueue(config, account, session)
-    processed += result.processed
-    errors += result.errors
+  // Use only ONE account per cycle — rotating accounts to reduce detection
+  // Pick account based on day of year to rotate
+  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
+  const validAccounts = (accounts as LinkedInAccount[]).filter(a => a.session_cookie)
+  if (!validAccounts.length) {
+    debug.push("SKIP: no accounts with session cookies")
+    return { processed: 0, errors: 0 }
   }
+  const account = validAccounts[dayOfYear % validAccounts.length]
+  debug.push(`Using account: ${account.account_name} (rotating, ${validAccounts.length} available)`)
+
+  const session: linkedin.LinkedInSession = {
+    sessionCookie: account.session_cookie!,
+    accountId: account.id,
+  }
+
+  // Skip explicit session validation — the first real API call will validate.
+  // This saves 1 API call and reduces detection risk.
+  debug.push("Skipping pre-validation (first API call will validate)")
+
+  // Phase 1: Discover new prospects if queue is low
+  try {
+    await discoverProspects(config, account, session, debug)
+  } catch (e) {
+    const errMsg = String(e)
+    debug.push(`Discovery error: ${errMsg}`)
+    // If discovery fails with redirect, cookie is dead — no point continuing
+    if (errMsg.includes("302") || errMsg.includes("redirect")) {
+      debug.push("Cookie appears dead — stopping cycle")
+      return { processed: 0, errors: 1 }
+    }
+  }
+
+  // Phase 2: Process existing queue items
+  const result = await processQueue(config, account, session)
+  processed += result.processed
+  errors += result.errors
 
   return { processed, errors }
 }
@@ -286,7 +288,7 @@ async function discoverProspects(
       })
     }
 
-    if (added >= 5) break // Max 5 new discoveries per cycle
+    if (added >= 3) break // Max 3 new discoveries per cycle — stay under radar
   }
 }
 
@@ -307,7 +309,7 @@ async function processQueue(
     .not("status", "in", '("converted","failed","skipped","paused","responded")')
     .or(`next_action_at.is.null,next_action_at.lte.${new Date().toISOString()}`)
     .order("fit_score", { ascending: false, nullsFirst: false })
-    .limit(5) // Process max 5 per cycle per account
+    .limit(3) // Process max 3 per cycle — less aggressive to avoid detection
 
   if (!items?.length) return { processed: 0, errors: 0 }
 

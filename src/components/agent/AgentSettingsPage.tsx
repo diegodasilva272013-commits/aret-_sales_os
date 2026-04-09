@@ -518,6 +518,8 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
   const [stats, setStats] = useState<Record<string, number>>({})
   const [loadingLogs, setLoadingLogs] = useState(true)
   const [toggling, setToggling] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [runResult, setRunResult] = useState<string | null>(null)
 
   useEffect(() => {
     async function fetch_data() {
@@ -563,6 +565,35 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
     setToggling(false)
   }
 
+  const runNow = async () => {
+    setRunning(true)
+    setRunResult(null)
+    try {
+      const res = await fetch("/api/agent/run", { method: "POST" })
+      const d = await res.json()
+      if (!res.ok) {
+        setRunResult(`❌ ${d.error || "Error"}`)
+      } else {
+        setRunResult(`✅ Procesados: ${d.processed}, Errores: ${d.errors}`)
+        onRefresh()
+        // Refresh logs
+        const logsRes = await fetch("/api/agent/logs?limit=20")
+        if (logsRes.ok) {
+          const ld = await logsRes.json()
+          setLogs(ld.data || [])
+        }
+        const queueRes = await fetch("/api/agent/queue?limit=5")
+        if (queueRes.ok) {
+          const qd = await queueRes.json()
+          setStats(qd.stats || {})
+        }
+      }
+    } catch {
+      setRunResult("❌ Error de red")
+    }
+    setRunning(false)
+  }
+
   const ACTION_LABELS: Record<string, string> = {
     profile_view: "Vista de perfil",
     post_like: "Like a post",
@@ -595,9 +626,25 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
               {isActive && !hasIssues ? "Agente ACTIVO — Prospectando" : hasIssues ? "Agente necesita configuración" : "Agente INACTIVO"}
             </h2>
           </div>
-          <button
-            onClick={toggleAgent}
-            disabled={toggling}
+          <div className="flex items-center gap-2">
+            {isActive && (
+              <button
+                onClick={runNow}
+                disabled={running || !isActive}
+                className="px-4 py-2.5 rounded-xl text-sm font-bold transition-all"
+                style={{
+                  background: "linear-gradient(135deg, #3b82f6, #2563eb)",
+                  color: "#fff",
+                  opacity: running ? 0.6 : 1,
+                  boxShadow: "0 4px 15px rgba(59,130,246,0.3)",
+                }}
+              >
+                {running ? "⏳ Ejecutando..." : "🚀 Ejecutar Ahora"}
+              </button>
+            )}
+            <button
+              onClick={toggleAgent}
+              disabled={toggling}
             className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
             style={{
               background: isActive
@@ -612,7 +659,15 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
           >
             {toggling ? "..." : isActive ? "⏸ Pausar Agente" : "▶ Activar Agente"}
           </button>
+          </div>
         </div>
+
+        {/* Run Result */}
+        {runResult && (
+          <p className="text-xs font-medium ml-7 mt-2" style={{ color: runResult.startsWith("✅") ? "#22c55e" : "#ef4444" }}>
+            {runResult}
+          </p>
+        )}
 
         {/* Checklist */}
         <div className="space-y-2 ml-7">

@@ -73,7 +73,11 @@ interface QueueItem {
   next_action_at: string | null
 }
 
-/** Main entry point — called by Vercel Cron every 5 min */
+/** Shorter delay for Vercel serverless (original 120-480s is too long for serverless timeout) */
+const CRON_DELAY_MIN_MS = 3000  // 3 seconds
+const CRON_DELAY_MAX_MS = 8000  // 8 seconds
+
+/** Main entry point — called by Vercel Cron */
 export async function runAgentCycle(): Promise<{ processed: number; errors: number }> {
   let processed = 0
   let errors = 0
@@ -140,13 +144,102 @@ async function processOrganization(config: AgentConfig): Promise<{ processed: nu
       continue
     }
 
-    // Process queue items by priority
+    // Phase 1: Discover new prospects if queue is low
+    try {
+      await discoverProspects(config, account, session)
+    } catch (e) {
+      console.error(`Discovery error for account ${account.id}:`, e)
+    }
+
+    // Phase 2: Process existing queue items
     const result = await processQueue(config, account, session)
     processed += result.processed
     errors += result.errors
   }
 
   return { processed, errors }
+}
+
+/** Discover new prospects using LinkedIn search based on ICP config */
+async function discoverProspects(
+  config: AgentConfig,
+  account: LinkedInAccount,
+  session: linkedin.LinkedInSession
+): Promise<void> {
+  // Only discover if queue has fewer than 20 active items
+  const { count } = await supabase
+    .from("agent_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", config.organization_id)
+    .not("status", "in", '("converted","failed","skipped","paused","responded")')
+
+  if ((count ?? 0) >= 20) return
+
+  // Build search keywords from ICP
+  const keywords = [
+    ...(config.icp_keywords || []),
+    ...(config.icp_roles || []),
+  ].filter(Boolean)
+
+  if (!keywords.length) return // No ICP configured, nothing to search
+
+  // Search with first keyword combo
+  const searchKeyword = keywords.slice(0, 3).join(" ")
+  const searchResult = await linkedin.searchPeople(session, {
+    keywords: searchKeyword,
+    industries: config.icp_industries,
+    titles: config.icp_roles,
+    locations: config.icp_locations,
+    count: 10,
+  })
+
+  if (!searchResult.success || !searchResult.results?.length) return
+
+  let added = 0
+  for (const person of searchResult.results) {
+    if (!person.publicId || !person.fullName) continue
+
+    const linkedinUrl = `https://www.linkedin.com/in/${person.publicId}/`
+
+    // Check if already in queue
+    const { data: existing } = await supabase
+      .from("agent_queue")
+      .select("id")
+      .eq("organization_id", config.organization_id)
+      .eq("linkedin_url", linkedinUrl)
+      .limit(1)
+
+    if (existing?.length) continue
+
+    // Add to queue as discovered
+    const { error } = await supabase.from("agent_queue").insert({
+      organization_id: config.organization_id,
+      linkedin_account_id: account.id,
+      linkedin_url: linkedinUrl,
+      full_name: person.fullName,
+      headline: person.headline || "",
+      company: person.company || "",
+      location: person.location || "",
+      status: "discovered",
+      fit_score: 50, // Default score, AI can refine later
+      started_at: new Date().toISOString(),
+      current_stage_started_at: new Date().toISOString(),
+    })
+
+    if (!error) {
+      added++
+      // Log the discovery
+      await supabase.from("agent_logs").insert({
+        organization_id: config.organization_id,
+        linkedin_account_id: account.id,
+        action_type: "profile_discovered",
+        action_detail: `${person.fullName} — ${person.headline}`,
+        success: true,
+      })
+    }
+
+    if (added >= 5) break // Max 5 new discoveries per cycle
+  }
 }
 
 /** Process queue items for one account */
@@ -172,8 +265,8 @@ async function processQueue(
 
   for (const item of items as QueueItem[]) {
     try {
-      // Random delay between actions
-      await linkedin.delay(config.delay_min_seconds * 1000, config.delay_max_seconds * 1000)
+      // Short delay between actions (fits within Vercel serverless timeout)
+      await linkedin.delay(CRON_DELAY_MIN_MS, CRON_DELAY_MAX_MS)
 
       const acted = await processItem(config, account, session, item)
       if (acted) processed++

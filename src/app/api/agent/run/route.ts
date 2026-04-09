@@ -8,8 +8,8 @@ import { getAgentScope } from "@/lib/agent-auth"
  */
 export async function POST() {
   const scope = await getAgentScope()
-  if (!scope) return NextResponse.json({ error: "Sin acceso" }, { status: 401 })
-  if (scope.role !== "owner") return NextResponse.json({ error: "Solo el owner puede ejecutar el agente" }, { status: 403 })
+  if ("error" in scope) return scope.error
+  if (!scope.isOwner) return NextResponse.json({ error: "Solo el owner puede ejecutar el agente" }, { status: 403 })
 
   try {
     const result = await runAgentCycle()

@@ -44,10 +44,11 @@ async function persistCookies(setCookieHeader: string | null, session: LinkedInS
  * Priority: CF_RELAY_URL > PROXY_URL > direct
  */
 async function liFetch(url: string, init?: RequestInit, session?: LinkedInSession): Promise<Response> {
-  const relayUrl = process.env.CF_RELAY_URL
-  const relaySecret = process.env.CF_RELAY_SECRET
+  const relayUrl = process.env.CF_RELAY_URL?.trim()
+  const relaySecret = process.env.CF_RELAY_SECRET?.trim()
 
   // Option 1: Cloudflare Worker relay (best for avoiding datacenter IP detection)
+  console.log(`[liFetch] relay=${relayUrl ? "YES" : "NO"} url=${url.substring(0, 80)}`)
   if (relayUrl && relaySecret) {
     const method = init?.method || "GET"
     const relayBody: Record<string, unknown> = {

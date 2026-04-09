@@ -4,9 +4,6 @@ import { getAgentScope } from "@/lib/agent-auth"
 export async function POST() {
   const scope = await getAgentScope()
   if (scope.error) return scope.error
-  if (!scope.isOwner) {
-    return NextResponse.json({ error: "Solo owners pueden pausar el agente" }, { status: 403 })
-  }
 
   const { data, error } = await scope.supabase
     .from("agent_config")

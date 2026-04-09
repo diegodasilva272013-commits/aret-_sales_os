@@ -4,9 +4,6 @@ import { getAgentScope } from "@/lib/agent-auth"
 export async function POST() {
   const scope = await getAgentScope()
   if (scope.error) return scope.error
-  if (!scope.isOwner) {
-    return NextResponse.json({ error: "Solo owners pueden activar el agente" }, { status: 403 })
-  }
 
   // Check at least one account is connected
   const { data: accounts } = await scope.supabase

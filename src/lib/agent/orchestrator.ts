@@ -180,6 +180,7 @@ async function processOrganization(config: AgentConfig, debug: string[]): Promis
   // Skip explicit session validation — the first real API call will validate.
   // This saves 1 API call and reduces detection risk.
   debug.push("Skipping pre-validation (first API call will validate)")
+  debug.push(`Relay: CF_RELAY_URL=${process.env.CF_RELAY_URL?.trim() ? "SET" : "UNSET"}, CF_RELAY_SECRET=${process.env.CF_RELAY_SECRET?.trim() ? "SET" : "UNSET"}`)
 
   // Phase 1: Discover new prospects if queue is low
   try {

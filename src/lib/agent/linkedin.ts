@@ -156,7 +156,7 @@ export async function validateSessionDetailed(session: LinkedInSession): Promise
 export async function viewProfile(
   session: LinkedInSession,
   publicId: string
-): Promise<{ success: boolean; profileData?: Record<string, unknown>; error?: string }> {
+): Promise<{ success: boolean; profileData?: Record<string, unknown>; memberUrn?: string; error?: string }> {
   try {
     const res = await liFetch(
       `${LI_BASE}/voyager/api/identity/dash/profiles?q=memberIdentity&memberIdentity=${encodeURIComponent(publicId)}`,
@@ -167,7 +167,16 @@ export async function viewProfile(
     const data = await res.json()
     // Profile data is in the included array
     const profile = data?.included?.[0] || data
-    return { success: true, profileData: profile }
+    // Extract the member URN (needed for sendConnection)
+    let memberUrn: string | undefined
+    for (const item of (data?.included || [])) {
+      const urn = item.entityUrn || item["*entityUrn"] || ""
+      if (urn.startsWith("urn:li:fsd_profile:")) {
+        memberUrn = urn
+        break
+      }
+    }
+    return { success: true, profileData: profile, memberUrn }
   } catch (e) {
     return { success: false, error: String(e) }
   }

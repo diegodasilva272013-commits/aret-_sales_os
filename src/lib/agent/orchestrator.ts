@@ -311,7 +311,7 @@ async function processQueue(
     .not("status", "in", '("converted","failed","skipped","paused","responded")')
     .or(`next_action_at.is.null,next_action_at.lte.${new Date().toISOString()}`)
     .order("fit_score", { ascending: false, nullsFirst: false })
-    .limit(3) // Process max 3 per cycle — less aggressive to avoid detection
+    .limit(1) // Process 1 per cycle — protect the cookie
 
   if (!items?.length) return { processed: 0, errors: 0 }
 
@@ -427,15 +427,21 @@ async function processItem(
 
     case "connecting": {
       if (account.daily_connections_used < config.daily_connection_limit) {
+        // First, get the real member URN via viewProfile
+        const profile = await linkedin.viewProfile(session, publicId)
+        if (!profile.success || !profile.memberUrn) {
+          await logAction(item, account.id, "connection_request", false, `viewProfile failed: ${profile.error || 'no memberUrn'}`, "")
+          return false
+        }
+        await linkedin.delay(CRON_DELAY_MIN_MS, CRON_DELAY_MAX_MS)
+        
         const note = await ai.generateConnectionNote({
           prospectName: item.full_name || "",
           prospectHeadline: item.headline || "",
           prospectCompany: item.company || "",
           discType: item.disc_type,
         })
-        // We need the profile URN — extract from linkedin_url 
-        const profileUrn = `urn:li:fsd_profile:${publicId}`
-        const result = await linkedin.sendConnection(session, profileUrn, note)
+        const result = await linkedin.sendConnection(session, profile.memberUrn, note)
         await logAction(item, account.id, "connection_request", result.success, result.error, note)
         if (result.success) {
           await advanceStatus(item, "connected")

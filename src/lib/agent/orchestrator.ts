@@ -175,6 +175,17 @@ async function processOrganization(config: AgentConfig, debug: string[]): Promis
   let processed = 0
   let errors = 0
 
+  // Phase 0: Keep-alive — validates session and refreshes cookie TTL
+  const alive = await linkedin.keepAlive(session)
+  if (!alive) {
+    debug.push("❌ Session invalid — cookie expired. User needs to update li_at.")
+    await supabase.from("agent_linkedin_accounts")
+      .update({ status: "disconnected" })
+      .eq("id", account.id)
+    return { processed: 0, errors: 1 }
+  }
+  debug.push("✅ Session alive")
+
   // Phase 1: Import connections if queue is low
   try {
     await importConnections(config, account, session, debug)

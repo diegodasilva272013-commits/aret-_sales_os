@@ -15,6 +15,7 @@ const LI_BASE = "https://www.linkedin.com"
 interface LinkedInSession {
   sessionCookie: string
   accountId: string
+  jsessionId?: string
 }
 
 /** Get proxy dispatcher if PROXY_URL is configured */
@@ -28,13 +29,22 @@ function getDispatcher(): ProxyAgent | undefined {
 async function persistCookies(setCookieHeader: string | null, session: LinkedInSession): Promise<void> {
   try {
     if (!setCookieHeader) return
+    
+    // Capture new li_at cookie
     const liAtMatch = setCookieHeader.match(/li_at=([^;]+)/)
     if (liAtMatch && liAtMatch[1] !== session.sessionCookie) {
+      console.log(`[persistCookies] li_at rotated for account ${session.accountId}`)
       const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
       await sb.from("agent_linkedin_accounts")
-        .update({ session_cookie: liAtMatch[1] })
+        .update({ session_cookie: liAtMatch[1], last_action_at: new Date().toISOString() })
         .eq("id", session.accountId)
       session.sessionCookie = liAtMatch[1]
+    }
+
+    // Capture JSESSIONID for CSRF token
+    const jsMatch = setCookieHeader.match(/JSESSIONID="?([^;"]+)/)
+    if (jsMatch) {
+      session.jsessionId = jsMatch[1]
     }
   } catch { /* non-critical */ }
 }
@@ -124,8 +134,9 @@ async function liFetch(url: string, init?: RequestInit, session?: LinkedInSessio
 
 /** Full Chrome-like headers to avoid bot detection */
 function headers(session: LinkedInSession) {
+  const jsessionId = session.jsessionId || "ajax:" + crypto.randomUUID().slice(0, 8)
   return {
-    "Cookie": `li_at=${session.sessionCookie}; JSESSIONID="ajax:0"; lang=v=2&lang=es-es`,
+    "Cookie": `li_at=${session.sessionCookie}; JSESSIONID="${jsessionId}"; lang=v=2&lang=es-es`,
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Accept": "application/vnd.linkedin.normalized+json+2.1",
     "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
@@ -134,7 +145,7 @@ function headers(session: LinkedInSession) {
     "X-Li-Page-Instance": `urn:li:page:d_flagship3_feed;${crypto.randomUUID()}`,
     "X-Li-Track": '{"clientVersion":"1.13.22","mpVersion":"1.13.22","osName":"web","timezoneOffset":-3,"deviceFormFactor":"DESKTOP","mpName":"voyager-web"}',
     "X-Restli-Protocol-Version": "2.0.0",
-    "Csrf-Token": "ajax:0",
+    "Csrf-Token": jsessionId,
     "Sec-Ch-Ua": '"Chromium";v="131", "Not_A Brand";v="24"',
     "Sec-Ch-Ua-Mobile": "?0",
     "Sec-Ch-Ua-Platform": '"Windows"',
@@ -174,12 +185,35 @@ export async function validateSessionDetailed(session: LinkedInSession): Promise
     try {
       const json = JSON.parse(text)
       const name = json?.miniProfile?.firstName || json?.plainId || "ok"
+
+      // Proactive keep-alive: also hit the feed to refresh LinkedIn's session TTL
+      // This prevents the cookie from expiring due to inactivity
+      liFetch(`${LI_BASE}/voyager/api/feed/dash/feedDetailsByModule?count=1&q=MODULE&moduleKey=NAVIGATOR_FEED`, {
+        headers: headers(session),
+      }, session).catch(() => { /* fire-and-forget */ })
+
       return { valid: true, detail: `Session valid (${name})` }
     } catch {
       return { valid: true, detail: `Session valid (${text.length} bytes)` }
     }
   } catch (e) {
     return { valid: false, detail: `Fetch error: ${String(e)}` }
+  }
+}
+
+/**
+ * Keep session alive — call this periodically (e.g. from cron) to prevent cookie expiry.
+ * Makes a lightweight request to LinkedIn that refreshes the session TTL.
+ */
+export async function keepAlive(session: LinkedInSession): Promise<boolean> {
+  try {
+    const res = await liFetch(`${LI_BASE}/voyager/api/me`, {
+      headers: headers(session),
+      redirect: "manual",
+    }, session)
+    return res.ok
+  } catch {
+    return false
   }
 }
 

@@ -42,7 +42,14 @@ export default {
     const responseBody = await res.text()
     const responseHeaders = {}
     for (const [k, v] of res.headers) {
-      responseHeaders[k] = v
+      // set-cookie can have multiple values — collect them all
+      if (k.toLowerCase() === "set-cookie") {
+        // Cloudflare Workers: getAll is available on Headers
+        const all = res.headers.getAll ? res.headers.getAll("set-cookie") : [v]
+        responseHeaders[k] = all.join(", ")
+      } else {
+        responseHeaders[k] = v
+      }
     }
 
     return new Response(JSON.stringify({

@@ -76,7 +76,7 @@ export default function AgentSettingsPage() {
   const [validating, setValidating] = useState<string | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null)
 
-  const [tab, setTab] = useState<"config" | "accounts" | "status">("config")
+  const [tab, setTab] = useState<"config" | "accounts" | "network" | "status">("config")
   const [cfgTab, setCfgTab] = useState<"icp" | "limits" | "schedule" | "sequence">("icp")
 
   // add account form
@@ -91,7 +91,7 @@ export default function AgentSettingsPage() {
 
   const show = (msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type })
-    setTimeout(() => setToast(null), 6000)
+    setTimeout(() => setToast(null), type === "err" ? 12000 : 6000)
   }
 
   /* ─── fetch all ─────────────────────────────────────── */
@@ -187,21 +187,37 @@ export default function AgentSettingsPage() {
   /* ─── validate account ──────────────────────────────── */
   const validateAccount = async (id: string) => {
     setValidating(id)
+    show("🔍 Validando cookie con LinkedIn...", "ok")
     try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 20000)
       const res = await fetch("/api/agent/accounts/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accountId: id }),
+        signal: controller.signal,
       })
-      const d = await res.json()
+      clearTimeout(timeout)
+      let d: Record<string, unknown>
+      try {
+        d = await res.json()
+      } catch {
+        show(`❌ Error del servidor (HTTP ${res.status})`, "err")
+        setValidating(null)
+        return
+      }
       if (d.valid) {
-        show(d.message || "✅ Cookie VÁLIDA — cuenta conectada", "ok")
+        show(String(d.message) || "✅ Cookie VÁLIDA — cuenta conectada", "ok")
       } else {
-        show(d.message || "❌ Cookie INVÁLIDA", "err")
+        show(String(d.message) || "❌ Cookie INVÁLIDA — actualizá la cookie", "err")
       }
       fetchAll()
-    } catch {
-      show("Error de red al validar", "err")
+    } catch (e: unknown) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        show("❌ Timeout — la validación tardó demasiado. Intentá de nuevo.", "err")
+      } else {
+        show("❌ Error de red al validar: " + String(e), "err")
+      }
     }
     setValidating(null)
   }
@@ -213,25 +229,26 @@ export default function AgentSettingsPage() {
       return
     }
     setUpdatingCookie(true)
+    show("💾 Guardando cookie...", "ok")
     try {
       const res = await fetch("/api/agent/accounts", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accountId, session_cookie: newCookie.trim() }),
       })
+      let d: Record<string, unknown> = {}
+      try { d = await res.json() } catch { /* non-json response */ }
       if (res.ok) {
-        show("Cookie guardada — validando...", "ok")
+        show("✅ Cookie guardada — validando ahora...", "ok")
         setEditingCookie(null)
         setNewCookie("")
-        fetchAll()
-        // Auto-validate after saving
-        setTimeout(() => validateAccount(accountId), 500)
+        await fetchAll()
+        validateAccount(accountId)
       } else {
-        const d = await res.json()
-        show(d.error || "Error al actualizar", "err")
+        show(String(d.error) || `❌ Error al guardar cookie (HTTP ${res.status})`, "err")
       }
     } catch (e) {
-      show("Error: " + String(e), "err")
+      show("❌ Error de red: " + String(e), "err")
     }
     setUpdatingCookie(false)
   }
@@ -279,6 +296,7 @@ export default function AgentSettingsPage() {
         {[
           { key: "config" as const, label: "Configuración ICP" },
           { key: "accounts" as const, label: "Cuentas LinkedIn" },
+          { key: "network" as const, label: "Mi Red" },
           { key: "status" as const, label: "Estado del Agente" },
         ].map(t => (
           <button
@@ -618,6 +636,9 @@ export default function AgentSettingsPage() {
         </div>
       )}
 
+      {/* ═══════════ TAB: MI RED ═══════════════════════════ */}
+      {tab === "network" && <NetworkPanel accounts={accounts} />}
+
       {/* ═══════════ TAB: STATUS ═══════════════════════════ */}
       {tab === "status" && <AgentStatusPanel cfg={cfg} accounts={accounts} onRefresh={fetchAll} />}
     </div>
@@ -863,6 +884,178 @@ function AgentStatusPanel({ cfg, accounts, onRefresh }: { cfg: AgentCfg; account
                 </div>
               )
             })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Network Panel (Mi Red) ─────────────────────────────── */
+function NetworkPanel({ accounts }: { accounts: Account[] }) {
+  const [connections, setConnections] = useState<Array<Record<string, unknown>>>([])
+  const [stats, setStats] = useState<Record<string, number>>({})
+  const [loading, setLoading] = useState(true)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<string | null>(null)
+
+  const fetchConnections = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch("/api/agent/connections")
+      if (res.ok) {
+        const d = await res.json()
+        setConnections(d.connections || [])
+        setStats(d.stats || {})
+      }
+    } catch { /* ignore */ }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchConnections() }, [fetchConnections])
+
+  const importNow = async () => {
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const res = await fetch("/api/agent/connections", { method: "POST" })
+      const d = await res.json()
+      if (res.ok) {
+        setImportResult(`✅ ${d.imported || 0} conexiones importadas${d.total ? ` (total en tu red: ~${d.total})` : ""}`)
+        fetchConnections()
+      } else {
+        setImportResult(`❌ ${d.error || "Error al importar"}`)
+      }
+    } catch (e) {
+      setImportResult(`❌ Error: ${String(e)}`)
+    }
+    setImporting(false)
+  }
+
+  const totalConnections = Object.values(stats).reduce((a, b) => a + b, 0)
+  const hasActiveAccount = accounts.some(a => a.status === "active" || a.status === "warming")
+
+  const NET_STATUS_COLORS: Record<string, string> = {
+    imported: "#6b7280", analyzing: "#8b5cf6", warming: "#f59e0b",
+    ready_to_dm: "#3b82f6", messaged: "#06b6d4", follow_up: "#8b5cf6",
+    responded: "#22c55e", converted: "#10b981", skipped: "#9ca3af", failed: "#ef4444",
+  }
+  const NET_STATUS_LABELS: Record<string, string> = {
+    imported: "Importado", analyzing: "Analizando", warming: "Calentando",
+    ready_to_dm: "Listo p/ DM", messaged: "Mensajeado", follow_up: "Follow-up",
+    responded: "Respondió", converted: "Convertido", skipped: "Descartado", failed: "Fallido",
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: "var(--border)", borderTopColor: "var(--accent)" }} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Mi Red de LinkedIn</h2>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>Importá tus conexiones y el agente las prospectará automáticamente</p>
+        </div>
+        <button onClick={importNow} disabled={importing || !hasActiveAccount}
+          className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all"
+          style={{ background: "linear-gradient(135deg, var(--accent), #7c3aed)", color: "#fff", opacity: importing || !hasActiveAccount ? 0.5 : 1 }}>
+          {importing ? "⏳ Importando..." : "📥 Importar Conexiones"}
+        </button>
+      </div>
+
+      {!hasActiveAccount && (
+        <div className="p-4 rounded-xl text-sm" style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", color: "#f59e0b" }}>
+          ⚠️ Primero validá tu cookie LinkedIn en la pestaña &quot;Cuentas LinkedIn&quot;
+        </div>
+      )}
+
+      {importResult && (
+        <div className="p-3 rounded-xl text-sm font-medium" style={{
+          background: importResult.startsWith("✅") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+          border: `1px solid ${importResult.startsWith("✅") ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+          color: importResult.startsWith("✅") ? "#22c55e" : "#ef4444",
+        }}>
+          {importResult}
+        </div>
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Importados", value: totalConnections, color: "var(--accent)" },
+          { label: "En Calentamiento", value: (stats["warming"] || 0) + (stats["analyzing"] || 0), color: "#f59e0b" },
+          { label: "Mensajeados", value: (stats["messaged"] || 0) + (stats["follow_up"] || 0), color: "#06b6d4" },
+          { label: "Respondieron", value: (stats["responded"] || 0) + (stats["converted"] || 0), color: "#22c55e" },
+        ].map(s => (
+          <div key={s.label} className="p-4 rounded-xl" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <p className="text-[10px] font-medium mb-1" style={{ color: "var(--text-muted)" }}>{s.label}</p>
+            <p className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Connection List */}
+      <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+        <div className="px-5 py-3 flex items-center justify-between" style={{ background: "var(--surface)" }}>
+          <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Conexiones ({totalConnections})</h3>
+          <button onClick={fetchConnections} className="text-[10px] px-2 py-1 rounded-full" style={{ background: "var(--accent-glow)", color: "var(--accent)" }}>
+            🔄 Refrescar
+          </button>
+        </div>
+
+        {connections.length === 0 ? (
+          <div className="px-5 py-12 text-center" style={{ background: "var(--surface-2)" }}>
+            <p className="text-3xl mb-2">🔗</p>
+            <p className="text-sm" style={{ color: "var(--text-muted)" }}>No hay conexiones importadas todavía</p>
+            <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Hacé clic en &quot;Importar Conexiones&quot; para traer tu red de LinkedIn</p>
+          </div>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+            {connections.slice(0, 50).map((conn, i) => {
+              const status = String(conn.status || "imported")
+              const fitScore = Number(conn.fit_score || 0)
+              return (
+                <div key={String(conn.id) || i} className="flex items-center gap-3 px-5 py-3" style={{ background: "var(--surface-2)" }}>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                    style={{ background: "rgba(0,119,181,0.15)", color: "#0077b5" }}>
+                    {String(conn.full_name || "?").charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold truncate" style={{ color: "var(--text-primary)" }}>{String(conn.full_name)}</p>
+                      {fitScore > 0 && fitScore !== 50 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{
+                          background: fitScore >= 70 ? "rgba(34,197,94,0.15)" : fitScore >= 40 ? "rgba(245,158,11,0.15)" : "rgba(107,114,128,0.15)",
+                          color: fitScore >= 70 ? "#22c55e" : fitScore >= 40 ? "#f59e0b" : "#6b7280",
+                        }}>
+                          {fitScore}%
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] truncate" style={{ color: "var(--text-muted)" }}>
+                      {String(conn.headline || conn.company || "")}
+                    </p>
+                  </div>
+                  <span className="px-2 py-1 rounded-full text-[10px] font-semibold shrink-0" style={{
+                    background: (NET_STATUS_COLORS[status] || "#6b7280") + "22",
+                    color: NET_STATUS_COLORS[status] || "#6b7280",
+                  }}>
+                    {NET_STATUS_LABELS[status] || status}
+                  </span>
+                </div>
+              )
+            })}
+            {connections.length > 50 && (
+              <div className="px-5 py-3 text-center text-xs" style={{ background: "var(--surface-2)", color: "var(--text-muted)" }}>
+                +{connections.length - 50} conexiones más...
+              </div>
+            )}
           </div>
         )}
       </div>

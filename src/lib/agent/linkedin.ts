@@ -52,10 +52,12 @@ async function persistCookies(setCookieHeader: string | null, session: LinkedInS
 /**
  * Smart fetch — uses CF Worker relay, PROXY_URL, or direct fetch.
  * Priority: CF_RELAY_URL > PROXY_URL > direct
+ * Note: use bracket notation to prevent Next.js webpack from inlining env vars at build time
  */
 async function liFetch(url: string, init?: RequestInit, session?: LinkedInSession): Promise<Response> {
-  const relayUrl = process.env.CF_RELAY_URL?.trim()
-  const relaySecret = process.env.CF_RELAY_SECRET?.trim()
+  const env = process.env
+  const relayUrl = (env["CF_RELAY_URL"] || "").trim() || undefined
+  const relaySecret = (env["CF_RELAY_SECRET"] || "").trim() || undefined
 
   // Option 1: Cloudflare Worker relay (best for avoiding datacenter IP detection)
   console.log(`[liFetch] relay=${relayUrl ? "YES" : "NO"} url=${url.substring(0, 80)}`)

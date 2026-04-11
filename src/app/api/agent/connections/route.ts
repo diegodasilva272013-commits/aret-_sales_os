@@ -79,11 +79,12 @@ export async function POST() {
   const startFrom = totalImported ?? 0
 
   try {
-    // Debug: log env config
-    const relayUrl = process.env.CF_RELAY_URL?.trim()
-    const relaySecret = process.env.CF_RELAY_SECRET?.trim()
+    // Use bracket notation to prevent webpack from inlining env vars at build time
+    const env = process.env
+    const relayUrl = (env["CF_RELAY_URL"] || "").trim() || undefined
+    const relaySecret = (env["CF_RELAY_SECRET"] || "").trim() || undefined
     const hasRelay = !!(relayUrl && relaySecret)
-    const hasProxy = !!process.env.PROXY_URL?.trim()
+    const hasProxy = !!(env["PROXY_URL"] || "").trim()
     console.log(`[connections] relay=${hasRelay} relayUrl=${relayUrl?.substring(0, 30)} offset=${startFrom}`)
 
     // Inline relay test before calling getConnections

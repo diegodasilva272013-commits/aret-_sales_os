@@ -79,11 +79,17 @@ export async function POST() {
   const startFrom = totalImported ?? 0
 
   try {
+    // Debug: log env config
+    const hasRelay = !!process.env.CF_RELAY_URL?.trim()
+    const hasProxy = !!process.env.PROXY_URL?.trim()
+    console.log(`[connections] import: relay=${hasRelay} proxy=${hasProxy} offset=${startFrom}`)
+
     const result = await getConnections(session, startFrom, 40)
 
     if (!result.success) {
       return NextResponse.json({
         error: `Error de LinkedIn: ${result.error}`,
+        debug: { relay: hasRelay, proxy: hasProxy, offset: startFrom },
         imported: 0,
       }, { status: 502 })
     }

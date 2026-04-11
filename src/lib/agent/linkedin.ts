@@ -60,15 +60,46 @@ async function liFetch(url: string, init?: RequestInit, session?: LinkedInSessio
       relayBody.bodyContent = JSON.parse(init.body as string)
     }
 
-    const relayRes = await fetch(relayUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Relay-Secret": relaySecret,
-      },
-      body: JSON.stringify(relayBody),
-    })
-    const data = await relayRes.json() as { status: number; statusText: string; headers: Record<string, string>; body: string }
+    let relayRes: Response
+    try {
+      relayRes = await fetch(relayUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Relay-Secret": relaySecret,
+        },
+        body: JSON.stringify(relayBody),
+      })
+    } catch (relayErr) {
+      console.error(`[liFetch] Relay fetch failed: ${String(relayErr)}`)
+      // Fallback to direct if relay fails
+      console.log(`[liFetch] Falling back to direct fetch...`)
+      const directRes = await fetch(url, init)
+      if (session) await persistCookies(directRes.headers.get("set-cookie"), session)
+      return directRes
+    }
+
+    if (!relayRes.ok) {
+      const errText = await relayRes.text().catch(() => "")
+      console.error(`[liFetch] Relay returned ${relayRes.status}: ${errText.slice(0, 200)}`)
+      // If relay returns auth error or 5xx, fallback to direct
+      if (relayRes.status >= 500 || relayRes.status === 401) {
+        console.log(`[liFetch] Relay error ${relayRes.status}, falling back to direct...`)
+        const directRes = await fetch(url, init)
+        if (session) await persistCookies(directRes.headers.get("set-cookie"), session)
+        return directRes
+      }
+    }
+
+    let data: { status: number; statusText: string; headers: Record<string, string>; body: string }
+    try {
+      data = await relayRes.json() as typeof data
+    } catch {
+      console.error(`[liFetch] Relay returned non-JSON response`)
+      const directRes = await fetch(url, init)
+      if (session) await persistCookies(directRes.headers.get("set-cookie"), session)
+      return directRes
+    }
 
     // Persist cookies from relay response
     if (session) await persistCookies(data.headers?.["set-cookie"] || null, session)

@@ -89,7 +89,7 @@ export async function POST() {
     if (!result.success) {
       return NextResponse.json({
         error: `Error de LinkedIn: ${result.error}`,
-        debug: { relay: hasRelay, proxy: hasProxy, offset: startFrom },
+        debug: { relay: hasRelay, proxy: hasProxy, offset: startFrom, relayUrl: process.env.CF_RELAY_URL?.trim()?.substring(0, 30) },
         imported: 0,
       }, { status: 502 })
     }
@@ -98,6 +98,7 @@ export async function POST() {
       return NextResponse.json({
         imported: 0,
         message: "No se encontraron más conexiones para importar",
+        debug: { relay: hasRelay, proxy: hasProxy },
         total: result.total || 0,
       })
     }

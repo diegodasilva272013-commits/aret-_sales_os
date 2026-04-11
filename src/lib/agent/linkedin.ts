@@ -52,12 +52,17 @@ async function persistCookies(setCookieHeader: string | null, session: LinkedInS
 /**
  * Smart fetch — uses CF Worker relay, PROXY_URL, or direct fetch.
  * Priority: CF_RELAY_URL > PROXY_URL > direct
- * Note: use bracket notation to prevent Next.js webpack from inlining env vars at build time
+// Hardcoded fallback — env vars don't reliably reach all Vercel serverless functions
+const RELAY_URL_FALLBACK = "https://linkedin-relay.arete-relay.workers.dev"
+const RELAY_SECRET_FALLBACK = "arete-relay-2026-secret-key"
+
+/**
+ * Smart fetch — uses CF Worker relay, PROXY_URL, or direct fetch.
+ * Priority: CF_RELAY_URL > PROXY_URL > direct
  */
 async function liFetch(url: string, init?: RequestInit, session?: LinkedInSession): Promise<Response> {
-  const env = process.env
-  const relayUrl = (env["CF_RELAY_URL"] || "").trim() || undefined
-  const relaySecret = (env["CF_RELAY_SECRET"] || "").trim() || undefined
+  const relayUrl = (process.env.CF_RELAY_URL || RELAY_URL_FALLBACK).trim()
+  const relaySecret = (process.env.CF_RELAY_SECRET || RELAY_SECRET_FALLBACK).trim()
 
   // Option 1: Cloudflare Worker relay (best for avoiding datacenter IP detection)
   console.log(`[liFetch] relay=${relayUrl ? "YES" : "NO"} url=${url.substring(0, 80)}`)

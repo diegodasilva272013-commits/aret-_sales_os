@@ -79,42 +79,13 @@ export async function POST() {
   const startFrom = totalImported ?? 0
 
   try {
-    // Use bracket notation to prevent webpack from inlining env vars at build time
-    const env = process.env
-    const relayUrl = (env["CF_RELAY_URL"] || "").trim() || undefined
-    const relaySecret = (env["CF_RELAY_SECRET"] || "").trim() || undefined
-    const hasRelay = !!(relayUrl && relaySecret)
-    const hasProxy = !!(env["PROXY_URL"] || "").trim()
-    console.log(`[connections] relay=${hasRelay} relayUrl=${relayUrl?.substring(0, 30)} offset=${startFrom}`)
-
-    // Inline relay test before calling getConnections
-    let relayTestResult = "skipped"
-    if (relayUrl && relaySecret) {
-      try {
-        const testRes = await fetch(relayUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Relay-Secret": relaySecret },
-          body: JSON.stringify({ url: "https://www.linkedin.com/voyager/api/me", method: "GET", headers: {} }),
-        })
-        relayTestResult = `HTTP ${testRes.status}`
-      } catch (e) {
-        relayTestResult = `FAIL: ${String(e)}`
-      }
-    }
-    console.log(`[connections] relayTest=${relayTestResult}`)
+    console.log(`[connections] importing offset=${startFrom}`)
 
     const result = await getConnections(session, startFrom, 40)
 
     if (!result.success) {
       return NextResponse.json({
         error: `Error de LinkedIn: ${result.error}`,
-        debug: {
-          relay: hasRelay,
-          proxy: hasProxy,
-          relayUrl: relayUrl?.substring(0, 50) || "NOT_SET",
-          relayTest: relayTestResult,
-          offset: startFrom,
-        },
         imported: 0,
       }, { status: 502 })
     }
@@ -123,7 +94,6 @@ export async function POST() {
       return NextResponse.json({
         imported: 0,
         message: "No se encontraron más conexiones para importar",
-        debug: { relay: hasRelay, proxy: hasProxy },
         total: result.total || 0,
       })
     }

@@ -924,7 +924,8 @@ function NetworkPanel({ accounts }: { accounts: Account[] }) {
         setImportResult(`✅ ${d.imported || 0} conexiones importadas${d.total ? ` (total en tu red: ~${d.total})` : ""}`)
         fetchConnections()
       } else {
-        setImportResult(`❌ ${d.error || "Error al importar"}${d.debug ? ` [relay=${d.debug.relay}, proxy=${d.debug.proxy}]` : ""}`)
+        const dbg = d.debug ? ` [relay=${d.debug.relay}, relayTest=${d.debug.relayTest}, url=${d.debug.relayUrl}]` : ""
+        setImportResult(`❌ ${d.error || "Error al importar"}${dbg}`)
       }
     } catch (e) {
       setImportResult(`❌ Error: ${String(e)}`)

@@ -80,16 +80,40 @@ export async function POST() {
 
   try {
     // Debug: log env config
-    const hasRelay = !!process.env.CF_RELAY_URL?.trim()
+    const relayUrl = process.env.CF_RELAY_URL?.trim()
+    const relaySecret = process.env.CF_RELAY_SECRET?.trim()
+    const hasRelay = !!(relayUrl && relaySecret)
     const hasProxy = !!process.env.PROXY_URL?.trim()
-    console.log(`[connections] import: relay=${hasRelay} proxy=${hasProxy} offset=${startFrom}`)
+    console.log(`[connections] relay=${hasRelay} relayUrl=${relayUrl?.substring(0, 30)} offset=${startFrom}`)
+
+    // Inline relay test before calling getConnections
+    let relayTestResult = "skipped"
+    if (relayUrl && relaySecret) {
+      try {
+        const testRes = await fetch(relayUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Relay-Secret": relaySecret },
+          body: JSON.stringify({ url: "https://www.linkedin.com/voyager/api/me", method: "GET", headers: {} }),
+        })
+        relayTestResult = `HTTP ${testRes.status}`
+      } catch (e) {
+        relayTestResult = `FAIL: ${String(e)}`
+      }
+    }
+    console.log(`[connections] relayTest=${relayTestResult}`)
 
     const result = await getConnections(session, startFrom, 40)
 
     if (!result.success) {
       return NextResponse.json({
         error: `Error de LinkedIn: ${result.error}`,
-        debug: { relay: hasRelay, proxy: hasProxy, offset: startFrom, relayUrl: process.env.CF_RELAY_URL?.trim()?.substring(0, 30) },
+        debug: {
+          relay: hasRelay,
+          proxy: hasProxy,
+          relayUrl: relayUrl?.substring(0, 50) || "NOT_SET",
+          relayTest: relayTestResult,
+          offset: startFrom,
+        },
         imported: 0,
       }, { status: 502 })
     }

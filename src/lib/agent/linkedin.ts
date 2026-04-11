@@ -339,11 +339,52 @@ export async function searchPeople(
   }
 }
 
-/** Get recent posts from a profile */
+/** Get recent posts from a profile (uses feed GraphQL endpoint) */
 export async function getProfilePosts(
   session: LinkedInSession,
   publicId: string,
   count = 5
+): Promise<{ success: boolean; posts?: Array<{ urn: string; text: string; likeCount: number }>; error?: string }> {
+  try {
+    // Try the GraphQL feed endpoint (more reliable than profileUpdatesV2)
+    const vars = `(count:${count},start:0,profileUrn:urn:li:fsd_profile:${encodeURIComponent(publicId)})`
+    const url = `${LI_BASE}/voyager/api/graphql?variables=${vars}&queryId=voyagerFeedDashProfileUpdates.f3e478a8f498c0774f0e53e33d805b4b`
+
+    const res = await liFetch(url, { headers: headers(session) }, session)
+    if (!res.ok) {
+      // Fallback: old REST endpoint
+      return getProfilePostsFallback(session, publicId, count)
+    }
+
+    const data = await res.json()
+    const posts: Array<{ urn: string; text: string; likeCount: number }> = []
+
+    // Posts are in included array with commentary
+    for (const item of (data?.included || [])) {
+      const text = item?.commentary?.text?.text
+        || item?.commentary?.text
+        || item?.resharedUpdate?.commentary?.text?.text
+        || ""
+      if (text && typeof text === "string" && text.length > 10) {
+        posts.push({
+          urn: item.updateUrn || item.entityUrn || item["*socialDetail"] || "",
+          text,
+          likeCount: item?.socialDetail?.totalSocialActivityCounts?.numLikes || 0,
+        })
+      }
+    }
+
+    return { success: true, posts }
+  } catch (e) {
+    return { success: false, error: String(e) }
+  }
+}
+
+/** Fallback: old REST endpoint for posts */
+async function getProfilePostsFallback(
+  session: LinkedInSession,
+  publicId: string,
+  count: number
 ): Promise<{ success: boolean; posts?: Array<{ urn: string; text: string; likeCount: number }>; error?: string }> {
   try {
     const res = await liFetch(
@@ -355,7 +396,6 @@ export async function getProfilePosts(
 
     const data = await res.json()
     const posts: Array<{ urn: string; text: string; likeCount: number }> = []
-
     for (const el of data?.elements || []) {
       const commentary = el?.commentary?.text?.text || el?.value?.com?.linkedin?.voyager?.feed?.render?.UpdateV2?.commentary?.text?.text || ""
       if (commentary) {
@@ -366,11 +406,145 @@ export async function getProfilePosts(
         })
       }
     }
-
     return { success: true, posts }
   } catch (e) {
     return { success: false, error: String(e) }
   }
+}
+
+/** List LinkedIn connections (already-connected people) */
+export async function getConnections(
+  session: LinkedInSession,
+  start = 0,
+  count = 40
+): Promise<{ success: boolean; connections?: Array<{ publicId: string; fullName: string; headline: string; company: string; memberUrn: string }>; total?: number; error?: string }> {
+  try {
+    const vars = `(start:${start},count:${count},origin:MEMBER_PROFILE_CANNED_SEARCH)`
+    const url = `${LI_BASE}/voyager/api/graphql?variables=${vars}&queryId=voyagerRelationshipsDashConnections.2dc8bdaddb5e2371ce379b5e9a44fcff`
+
+    const res = await liFetch(url, { headers: headers(session) }, session)
+    if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
+
+    const data = await res.json()
+    const connections: Array<{ publicId: string; fullName: string; headline: string; company: string; memberUrn: string }> = []
+
+    // Connections data is in the included array
+    for (const item of (data?.included || [])) {
+      // Look for mini-profile type items
+      const pubId = item.publicIdentifier
+      if (pubId && item.firstName) {
+        connections.push({
+          publicId: pubId,
+          fullName: `${item.firstName || ""} ${item.lastName || ""}`.trim(),
+          headline: item.occupation || item.headline || "",
+          company: "",
+          memberUrn: item.entityUrn || "",
+        })
+      }
+    }
+
+    // Also check for navigation URL style items
+    if (connections.length === 0) {
+      for (const item of (data?.included || [])) {
+        if (item.navigationUrl?.includes("/in/")) {
+          const match = item.navigationUrl.match(/\/in\/([^/?]+)/)
+          if (match) {
+            connections.push({
+              publicId: match[1],
+              fullName: item.title?.text || "",
+              headline: item.primarySubtitle?.text || "",
+              company: item.secondarySubtitle?.text || "",
+              memberUrn: item.entityUrn || "",
+            })
+          }
+        }
+      }
+    }
+
+    // Try to get total from paging
+    const total = data?.data?.paging?.total
+      || data?.paging?.total
+      || data?.data?.searchDashConnectionsByMemberIdentity?.paging?.total
+      || undefined
+
+    return { success: true, connections, total }
+  } catch (e) {
+    return { success: false, error: String(e) }
+  }
+}
+
+/** Get detailed profile data including about, experience, skills */
+export async function getFullProfile(
+  session: LinkedInSession,
+  publicId: string
+): Promise<{ success: boolean; profile?: FullProfileData; error?: string }> {
+  try {
+    const res = await liFetch(
+      `${LI_BASE}/voyager/api/identity/dash/profiles?q=memberIdentity&memberIdentity=${encodeURIComponent(publicId)}&decorationId=com.linkedin.voyager.dash.deco.identity.profile.FullProfileWithEntities-109`,
+      { headers: headers(session) },
+      session
+    )
+    if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
+
+    const data = await res.json()
+    const included = data?.included || []
+
+    let about = ""
+    let firstName = ""
+    let lastName = ""
+    let headline = ""
+    let locationName = ""
+    let memberUrn = ""
+    const experience: Array<{ title: string; company: string; duration: string }> = []
+    const skills: string[] = []
+
+    for (const item of included) {
+      // Profile entity
+      if (item.entityUrn?.startsWith("urn:li:fsd_profile:")) {
+        memberUrn = item.entityUrn
+        firstName = item.firstName || firstName
+        lastName = item.lastName || lastName
+        headline = item.headline || headline
+        about = item.summary || about
+        locationName = item.locationName || item.geoLocationName || locationName
+      }
+      // Experience items
+      if (item.$type?.includes("Position") || item.companyName) {
+        experience.push({
+          title: item.title || "",
+          company: item.companyName || item.company?.name || "",
+          duration: item.dateRange?.start ? `${item.dateRange.start.year}` : "",
+        })
+      }
+      // Skills
+      if (item.$type?.includes("Skill") && item.name) {
+        skills.push(item.name)
+      }
+    }
+
+    return {
+      success: true,
+      profile: {
+        firstName, lastName, headline, about, locationName,
+        memberUrn, experience, skills,
+        fullName: `${firstName} ${lastName}`.trim(),
+      },
+    }
+  } catch (e) {
+    return { success: false, error: String(e) }
+  }
+}
+
+export interface FullProfileData {
+  firstName: string
+  lastName: string
+  fullName: string
+  headline: string
+  about: string
+  locationName: string
+  memberUrn: string
+  experience: Array<{ title: string; company: string; duration: string }>
+  skills: string[]
 }
 
 export { delay, type LinkedInSession }

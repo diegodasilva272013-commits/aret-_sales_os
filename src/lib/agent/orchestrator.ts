@@ -1,9 +1,9 @@
 // =====================================================
-// Areté Sales OS — Agent Orchestrator
+// Areté Sales OS — Agent Orchestrator v2
 // =====================================================
-// Runs inside Vercel Cron. Processes all active orgs,
-// picks next actions, executes via LinkedIn HTTP API,
-// logs results, and advances prospects through the pipeline.
+// NEW FLOW: Prospect from YOUR network (connections).
+// Pipeline: import → analyze → warm → dm → follow_up → converted
+// Runs 5-6 contacts per cron call, ~30/day distributed.
 // =====================================================
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js"
@@ -71,31 +71,37 @@ interface QueueItem {
   status: string
   current_stage_started_at: string | null
   next_action_at: string | null
+  profile_data: Record<string, unknown> | null
+  messaged_at: string | null
 }
 
-/** Shorter delay for Vercel serverless — but not too fast to avoid detection */
-const CRON_DELAY_MIN_MS = 5000  // 5 seconds
-const CRON_DELAY_MAX_MS = 12000  // 12 seconds
+// ── Constants ──────────────────────────────────────────
+const CRON_DELAY_MIN_MS = 3000   // 3 seconds between API calls
+const CRON_DELAY_MAX_MS = 8000   // 8 seconds
+const CONTACTS_PER_CYCLE = 5     // Process 5 per cron call → ~30/day with 6 calls
+const IMPORT_BATCH = 40          // Import 40 connections per batch
+const FOLLOW_UP_DAYS = 2         // Follow up after 2 days of no response
 
-/** Main entry point — called by Vercel Cron */
+// Service description — used by AI to generate personalized messages
+const SERVICE_DESCRIPTION = `Areté es una consultora que ayuda a empresas y líderes a potenciar sus equipos de ventas con entrenamiento, coaching y herramientas de gestión comercial. Trabajamos con directores, gerentes y equipos comerciales para mejorar sus resultados.`
+
+/** Main entry point — called by Vercel Cron or external trigger */
 export async function runAgentCycle(): Promise<{ processed: number; errors: number; debug?: string[] }> {
   let processed = 0
   let errors = 0
   const debug: string[] = []
 
-  // Get all active agent configs
   const { data: configs, error: cfgError } = await supabase
     .from("agent_config")
     .select("*")
     .eq("is_active", true)
 
   if (cfgError) {
-    debug.push(`DB error fetching configs: ${cfgError.message}`)
+    debug.push(`DB error: ${cfgError.message}`)
     return { processed: 0, errors: 1, debug }
   }
-
   if (!configs?.length) {
-    debug.push("No active agent configs found")
+    debug.push("No active configs")
     return { processed: 0, errors: 0, debug }
   }
 
@@ -107,7 +113,7 @@ export async function runAgentCycle(): Promise<{ processed: number; errors: numb
       processed += result.processed
       errors += result.errors
     } catch (e) {
-      debug.push(`CRASH processing org ${config.organization_id}: ${String(e)}`)
+      debug.push(`CRASH org ${config.organization_id}: ${String(e)}`)
       errors++
     }
   }
@@ -115,21 +121,19 @@ export async function runAgentCycle(): Promise<{ processed: number; errors: numb
   return { processed, errors, debug }
 }
 
-/** Process all pending actions for one organization */
+/** Process one organization: import connections + work the pipeline */
 async function processOrganization(config: AgentConfig, debug: string[]): Promise<{ processed: number; errors: number }> {
-  // Check if within active hours (Argentina UTC-3)
   const now = new Date()
-  const currentHour = ((now.getUTCHours() - 3) % 24 + 24) % 24 // Safe modulo for negative
+  const currentHour = ((now.getUTCHours() - 3) % 24 + 24) % 24
   const currentDay = now.getDay()
 
-  debug.push(`Time check: day=${currentDay} hour=${currentHour} (UTC ${now.getUTCHours()}), config: days=${JSON.stringify(config.active_days)} hours=${config.active_hours_start}-${config.active_hours_end}`)
+  debug.push(`Time: day=${currentDay} hour=${currentHour} (UTC ${now.getUTCHours()})`)
 
   if (!config.active_days.includes(currentDay)) {
-    debug.push(`SKIP: day ${currentDay} not in active_days`)
+    debug.push(`SKIP: day ${currentDay} not active`)
     return { processed: 0, errors: 0 }
   }
   
-  // Handle active_hours_end=0 as 24 (midnight), and skip check if start==end (always active)
   const start = config.active_hours_start
   const end = config.active_hours_end === 0 ? 24 : config.active_hours_end
   if (start !== end && (currentHour < start || currentHour >= end)) {
@@ -139,7 +143,6 @@ async function processOrganization(config: AgentConfig, debug: string[]): Promis
 
   debug.push("Hours OK, fetching accounts...")
 
-  // Get all accounts that have a session cookie (let validation decide if they work)
   const { data: accounts, error: accError } = await supabase
     .from("agent_linkedin_accounts")
     .select("*")
@@ -147,111 +150,93 @@ async function processOrganization(config: AgentConfig, debug: string[]): Promis
     .not("status", "eq", "banned")
     .order("id")
 
-  if (accError) {
-    debug.push(`DB error fetching accounts: ${accError.message}`)
-    return { processed: 0, errors: 1 }
+  if (accError || !accounts?.length) {
+    debug.push(accError ? `DB error: ${accError.message}` : "No accounts")
+    return { processed: 0, errors: accError ? 1 : 0 }
   }
 
-  if (!accounts?.length) {
-    debug.push("SKIP: no active/warming accounts")
-    return { processed: 0, errors: 0 }
-  }
-
-  debug.push(`Found ${accounts.length} account(s)`)
-  let processed = 0
-  let errors = 0
-
-  // Use only ONE account per cycle — rotating accounts to reduce detection
-  // Pick account based on day of year to rotate
-  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000)
   const validAccounts = (accounts as LinkedInAccount[]).filter(a => a.session_cookie)
   if (!validAccounts.length) {
-    debug.push("SKIP: no accounts with session cookies")
+    debug.push("No accounts with cookies")
     return { processed: 0, errors: 0 }
   }
+
+  // Rotate accounts by day
+  const dayOfYear = Math.floor((Date.now() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000)
   const account = validAccounts[dayOfYear % validAccounts.length]
-  debug.push(`Using account: ${account.account_name} (rotating, ${validAccounts.length} available)`)
+  debug.push(`Account: ${account.account_name}`)
+  debug.push(`Relay: CF_RELAY_URL=${process.env.CF_RELAY_URL?.trim() ? "SET" : "UNSET"}`)
 
   const session: linkedin.LinkedInSession = {
     sessionCookie: account.session_cookie!,
     accountId: account.id,
   }
 
-  // Skip explicit session validation — the first real API call will validate.
-  // This saves 1 API call and reduces detection risk.
-  debug.push("Skipping pre-validation (first API call will validate)")
-  debug.push(`Relay: CF_RELAY_URL=${process.env.CF_RELAY_URL?.trim() ? "SET" : "UNSET"}, CF_RELAY_SECRET=${process.env.CF_RELAY_SECRET?.trim() ? "SET" : "UNSET"}`)
+  let processed = 0
+  let errors = 0
 
-  // Phase 1: Discover new prospects if queue is low
+  // Phase 1: Import connections if queue is low
   try {
-    await discoverProspects(config, account, session, debug)
+    await importConnections(config, account, session, debug)
   } catch (e) {
-    const errMsg = String(e)
-    debug.push(`Discovery error: ${errMsg}`)
-    // If discovery fails with redirect, cookie is dead — no point continuing
-    if (errMsg.includes("302") || errMsg.includes("redirect")) {
-      debug.push("Cookie appears dead — stopping cycle")
+    const msg = String(e)
+    debug.push(`Import error: ${msg}`)
+    if (msg.includes("302") || msg.includes("redirect")) {
+      debug.push("Cookie dead — stopping")
       return { processed: 0, errors: 1 }
     }
   }
 
-  // Phase 2: Process existing queue items
-  const result = await processQueue(config, account, session)
+  // Phase 2: Process pipeline (up to CONTACTS_PER_CYCLE items)
+  const result = await processQueue(config, account, session, debug)
   processed += result.processed
   errors += result.errors
 
   return { processed, errors }
 }
 
-/** Discover new prospects using LinkedIn search based on ICP config */
-async function discoverProspects(
+/** Import connections from LinkedIn network into the queue */
+async function importConnections(
   config: AgentConfig,
   account: LinkedInAccount,
   session: linkedin.LinkedInSession,
   debug: string[]
 ): Promise<void> {
-  // Only discover if queue has fewer than 20 active items
+  // Only import if we need more prospects in the pipeline
   const { count } = await supabase
     .from("agent_queue")
     .select("*", { count: "exact", head: true })
     .eq("organization_id", config.organization_id)
     .not("status", "in", '("converted","failed","skipped","paused","responded")')
 
-  debug.push(`Queue has ${count ?? 0} active items (max 20)`)
-  if ((count ?? 0) >= 20) return
-
-  // Build search keywords from ICP
-  const keywords = [
-    ...(config.icp_keywords || []),
-    ...(config.icp_roles || []),
-  ].filter(Boolean)
-
-  if (!keywords.length) {
-    debug.push("SKIP discovery: no ICP keywords or roles configured")
+  const activeCount = count ?? 0
+  debug.push(`Queue: ${activeCount} active items`)
+  if (activeCount >= 100) {
+    debug.push("Queue full, skipping import")
     return
   }
 
-  // Search with first keyword combo
-  const searchKeyword = keywords.slice(0, 3).join(" ")
-  debug.push(`Searching LinkedIn for: "${searchKeyword}"`)
-  
-  const searchResult = await linkedin.searchPeople(session, {
-    keywords: searchKeyword,
-    industries: config.icp_industries,
-    titles: config.icp_roles,
-    locations: config.icp_locations,
-    count: 10,
-  })
+  // Get how many we've already imported total
+  const { count: totalImported } = await supabase
+    .from("agent_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", config.organization_id)
 
-  debug.push(`Search result: success=${searchResult.success}, results=${searchResult.results?.length ?? 0}, error=${searchResult.error || 'none'}`)
+  const startFrom = totalImported ?? 0
+  debug.push(`Importing connections from offset ${startFrom}`)
 
-  if (!searchResult.success || !searchResult.results?.length) return
+  const result = await linkedin.getConnections(session, startFrom, IMPORT_BATCH)
+  if (!result.success || !result.connections?.length) {
+    debug.push(`Connections: ${result.error || "no results"}`)
+    return
+  }
+
+  debug.push(`Got ${result.connections.length} connections (total: ${result.total || "unknown"})`)
 
   let added = 0
-  for (const person of searchResult.results) {
-    if (!person.publicId || !person.fullName) continue
-
-    const linkedinUrl = `https://www.linkedin.com/in/${person.publicId}/`
+  for (const conn of result.connections) {
+    if (!conn.publicId || !conn.fullName) continue
+    const linkedinUrl = `https://www.linkedin.com/in/${conn.publicId}/`
 
     // Check if already in queue
     const { data: existing } = await supabase
@@ -263,47 +248,44 @@ async function discoverProspects(
 
     if (existing?.length) continue
 
-    // Add to queue as discovered
-    const { error } = await supabase.from("agent_queue").insert({
+    await supabase.from("agent_queue").insert({
       organization_id: config.organization_id,
       linkedin_account_id: account.id,
       linkedin_url: linkedinUrl,
-      full_name: person.fullName,
-      headline: person.headline || "",
-      company: person.company || "",
-      location: person.location || "",
-      status: "discovered",
-      fit_score: 50, // Default score, AI can refine later
+      full_name: conn.fullName,
+      headline: conn.headline || "",
+      company: conn.company || "",
+      status: "imported",
+      fit_score: 50,
       started_at: new Date().toISOString(),
       current_stage_started_at: new Date().toISOString(),
     })
+    added++
+  }
 
-    if (!error) {
-      added++
-      // Log the discovery
-      await supabase.from("agent_logs").insert({
-        organization_id: config.organization_id,
-        linkedin_account_id: account.id,
-        action_type: "profile_discovered",
-        action_detail: `${person.fullName} — ${person.headline}`,
-        success: true,
-      })
-    }
-
-    if (added >= 3) break // Max 3 new discoveries per cycle — stay under radar
+  debug.push(`Imported ${added} new connections`)
+  if (added > 0) {
+    await supabase.from("agent_logs").insert({
+      organization_id: config.organization_id,
+      linkedin_account_id: account.id,
+      action_type: "connections_imported",
+      action_detail: `${added} connections imported (offset ${startFrom})`,
+      success: true,
+    })
   }
 }
 
-/** Process queue items for one account */
+/** Process queue items through the pipeline */
 async function processQueue(
   config: AgentConfig,
   account: LinkedInAccount,
-  session: linkedin.LinkedInSession
+  session: linkedin.LinkedInSession,
+  debug: string[]
 ): Promise<{ processed: number; errors: number }> {
   let processed = 0
   let errors = 0
 
-  // Get items ready for action (next_action_at <= now or null for new items)
+  // Get items ready for action, prioritize by stage progression
   const { data: items } = await supabase
     .from("agent_queue")
     .select("*")
@@ -311,19 +293,22 @@ async function processQueue(
     .not("status", "in", '("converted","failed","skipped","paused","responded")')
     .or(`next_action_at.is.null,next_action_at.lte.${new Date().toISOString()}`)
     .order("fit_score", { ascending: false, nullsFirst: false })
-    .limit(1) // Process 1 per cycle — protect the cookie
+    .limit(CONTACTS_PER_CYCLE)
 
-  if (!items?.length) return { processed: 0, errors: 0 }
+  if (!items?.length) {
+    debug.push("No items ready to process")
+    return { processed: 0, errors: 0 }
+  }
+
+  debug.push(`Processing ${items.length} items`)
 
   for (const item of items as QueueItem[]) {
     try {
-      // Short delay between actions (fits within Vercel serverless timeout)
       await linkedin.delay(CRON_DELAY_MIN_MS, CRON_DELAY_MAX_MS)
-
-      const acted = await processItem(config, account, session, item)
+      const acted = await processItem(config, account, session, item, debug)
       if (acted) processed++
     } catch (e) {
-      console.error(`Error processing queue item ${item.id}:`, e)
+      console.error(`Error processing ${item.id}:`, e)
       await logAction(item, account.id, "error", false, String(e))
       errors++
     }
@@ -332,14 +317,20 @@ async function processQueue(
   return { processed, errors }
 }
 
-/** Process a single queue item based on its current status */
+/**
+ * Process a single queue item based on its pipeline stage.
+ * 
+ * PIPELINE (for network connections):
+ * imported → analyzing → warming → ready_to_dm → messaged → follow_up → responded/converted
+ */
 async function processItem(
   config: AgentConfig,
   account: LinkedInAccount,
   session: linkedin.LinkedInSession,
-  item: QueueItem
+  item: QueueItem,
+  debug: string[]
 ): Promise<boolean> {
-  const daysSinceStageStart = item.current_stage_started_at
+  const daysSinceStage = item.current_stage_started_at
     ? (Date.now() - new Date(item.current_stage_started_at).getTime()) / (1000 * 60 * 60 * 24)
     : 0
 
@@ -350,148 +341,235 @@ async function processItem(
   }
 
   switch (item.status) {
-    case "discovered": {
-      // View profile → try to get posts for engagement, then advance
-      const result = await linkedin.viewProfile(session, publicId)
-      await logAction(item, account.id, "profile_view", result.success, result.error)
+    // ── STAGE 1: Analyze profile deeply ──
+    case "imported": {
+      debug.push(`Analyzing: ${item.full_name}`)
+      
+      // Get full profile with about, experience, skills
+      const fullProfile = await linkedin.getFullProfile(session, publicId)
+      if (!fullProfile.success || !fullProfile.profile) {
+        // If getFullProfile fails, try basic viewProfile
+        const basic = await linkedin.viewProfile(session, publicId)
+        await logAction(item, account.id, "profile_view", basic.success, basic.error)
+        if (!basic.success) return false
+        
+        // Advance with basic data
+        await advanceStatus(item, "analyzing")
+        return true
+      }
+
+      const profile = fullProfile.profile
+      await logAction(item, account.id, "profile_deep_view", true)
+
+      // Get recent posts for context
+      const posts = await linkedin.getProfilePosts(session, publicId, 3)
+      const recentPosts = posts.posts?.map(p => p.text.slice(0, 200)) || []
+
+      // AI analysis: pain points, sales angle, disc type, fit score
+      const analysis = await ai.analyzeProfile({
+        fullName: profile.fullName,
+        headline: profile.headline,
+        about: profile.about,
+        experience: profile.experience,
+        skills: profile.skills,
+        recentPosts,
+        serviceDescription: SERVICE_DESCRIPTION,
+      })
+
+      // Update queue item with analysis
+      await supabase.from("agent_queue").update({
+        disc_type: analysis.discType,
+        pain_points: analysis.painPoints,
+        sales_angle: analysis.salesAngle,
+        fit_score: analysis.fitScore,
+        profile_data: {
+          about: profile.about,
+          experience: profile.experience,
+          skills: profile.skills,
+          toneStyle: analysis.toneStyle,
+          recentPosts,
+          memberUrn: profile.memberUrn,
+        },
+        updated_at: new Date().toISOString(),
+      }).eq("id", item.id)
+
+      await logAction(item, account.id, "profile_analyzed", true, undefined,
+        `Score: ${analysis.fitScore}, DISC: ${analysis.discType}, Angle: ${analysis.salesAngle}`)
+
+      // Skip low-fit prospects
+      if (analysis.fitScore < 25) {
+        await advanceStatus(item, "skipped", `Low fit: ${analysis.fitScore}`)
+        debug.push(`Skipped ${item.full_name}: low fit ${analysis.fitScore}`)
+        return true
+      }
+
+      // Has posts? → warm them up. No posts? → go straight to DM
+      if (recentPosts.length > 0) {
+        await advanceStatus(item, "warming")
+      } else {
+        await advanceStatus(item, "ready_to_dm")
+      }
+      debug.push(`Analyzed ${item.full_name}: score=${analysis.fitScore} → ${recentPosts.length ? "warming" : "ready_to_dm"}`)
+      return true
+    }
+
+    // ── Retry analysis for items that partially failed ──
+    case "analyzing": {
+      await advanceStatus(item, "warming")
+      return true
+    }
+
+    // ── STAGE 2: Warm up — like/comment their posts ──
+    case "warming": {
+      // After warming_days, move to DM
+      if (daysSinceStage >= config.warming_days) {
+        await advanceStatus(item, "ready_to_dm")
+        debug.push(`${item.full_name}: warming done → ready_to_dm`)
+        return true
+      }
+
+      // Try to like a post
+      const posts = await linkedin.getProfilePosts(session, publicId, 5)
+      if (!posts.success || !posts.posts?.length) {
+        // No posts available — skip to DM
+        await advanceStatus(item, "ready_to_dm")
+        return true
+      }
+
+      // Like first post
+      const post = posts.posts[0]
+      const likeResult = await linkedin.likePost(session, post.urn)
+      await logAction(item, account.id, "post_like", likeResult.success, likeResult.error)
+
+      // If we have time and another post, comment on it (only if > 1 day into warming)
+      if (daysSinceStage >= 1 && posts.posts.length > 1 && likeResult.success) {
+        await linkedin.delay(CRON_DELAY_MIN_MS, CRON_DELAY_MAX_MS)
+        const commentPost = posts.posts[1]
+        const comment = await ai.generateComment({
+          postContent: commentPost.text,
+          prospectName: item.full_name || "",
+          prospectHeadline: item.headline || "",
+        })
+        const commentResult = await linkedin.commentOnPost(session, commentPost.urn, comment)
+        await logAction(item, account.id, "post_comment", commentResult.success, commentResult.error, comment)
+      }
+
+      await setNextAction(item, 12) // Check again in ~12 hours
+      debug.push(`Warmed ${item.full_name}: liked${daysSinceStage >= 1 ? " + commented" : ""}`)
+      return true
+    }
+
+    // ── STAGE 3: Send personalized DM ──
+    case "ready_to_dm": {
+      const profileData = (item.profile_data || {}) as Record<string, unknown>
+      const toneStyle = (profileData.toneStyle as string) || "informal"
+      const recentPosts = (profileData.recentPosts as string[]) || []
+      const memberUrn = (profileData.memberUrn as string) || ""
+
+      // Generate hyper-personalized first message
+      const message = await ai.generateFirstDM({
+        prospectName: item.full_name || "",
+        prospectHeadline: item.headline || "",
+        prospectCompany: item.company || "",
+        about: (profileData.about as string) || "",
+        painPoints: item.pain_points || [],
+        salesAngle: item.sales_angle || "",
+        toneStyle,
+        recentPostSnippet: recentPosts[0],
+        serviceDescription: SERVICE_DESCRIPTION,
+      })
+
+      if (!message) {
+        await logAction(item, account.id, "dm_generation_failed", false, "Empty message")
+        return false
+      }
+
+      // Get member URN for DM (need the real one, not publicId)
+      let dmUrn = memberUrn
+      if (!dmUrn || !dmUrn.startsWith("urn:li:fsd_profile:")) {
+        const profile = await linkedin.viewProfile(session, publicId)
+        dmUrn = profile.memberUrn || `urn:li:fsd_profile:${publicId}`
+        await linkedin.delay(CRON_DELAY_MIN_MS, CRON_DELAY_MAX_MS)
+      }
+
+      const result = await linkedin.sendMessage(session, dmUrn, message)
+      await logAction(item, account.id, "direct_message", result.success, result.error, message)
+
       if (result.success) {
-        // Try to get posts for warming/commenting phases
-        const posts = await linkedin.getProfilePosts(session, publicId, 3)
-        if (posts.success && posts.posts?.length) {
-          // Posts available → go through warming phase
-          await advanceStatus(item, "warming")
-        } else {
-          // No posts available → skip warming/commenting, go to connecting
-          await advanceStatus(item, "connecting")
-        }
+        // Store the message in profile_data for follow-up reference
+        await supabase.from("agent_queue").update({
+          status: "messaged",
+          messaged_at: new Date().toISOString(),
+          current_stage_started_at: new Date().toISOString(),
+          profile_data: { ...profileData, firstMessage: message },
+          updated_at: new Date().toISOString(),
+        }).eq("id", item.id)
+
+        debug.push(`DM sent to ${item.full_name}`)
       }
       return result.success
     }
 
-    case "warming": {
-      if (daysSinceStageStart >= config.warming_days) {
-        await advanceStatus(item, "commenting")
-        return true
-      }
-      // Like posts during warming
-      if (account.daily_comments_used < config.daily_like_limit) {
-        const posts = await linkedin.getProfilePosts(session, publicId, 3)
-        if (posts.success && posts.posts?.length) {
-          const post = posts.posts[0]
-          const result = await linkedin.likePost(session, post.urn)
-          await logAction(item, account.id, "post_like", result.success, result.error)
-          await updateNextAction(item, config)
-          return result.success
-        } else {
-          // Posts API unavailable — skip to connecting
-          await advanceStatus(item, "connecting")
-          return true
-        }
-      }
-      return false
-    }
+    // ── STAGE 4: Follow up if no response ──
+    case "messaged": {
+      if (!item.messaged_at) return false
 
-    case "commenting": {
-      if (daysSinceStageStart >= config.commenting_days) {
-        await advanceStatus(item, "connecting")
-        return true
-      }
-      // Comment on posts
-      if (account.daily_comments_used < config.daily_comment_limit) {
-        const posts = await linkedin.getProfilePosts(session, publicId, 5)
-        if (posts.success && posts.posts?.length) {
-          const post = posts.posts[0]
-          const comment = await ai.generateComment({
-            postContent: post.text,
-            prospectName: item.full_name || "profesional",
-            prospectHeadline: item.headline || "",
-          })
-          const result = await linkedin.commentOnPost(session, post.urn, comment)
-          await logAction(item, account.id, "post_comment", result.success, result.error, comment)
-          if (result.success) {
-            await supabase
-              .from("agent_linkedin_accounts")
-              .update({ daily_comments_used: account.daily_comments_used + 1, last_action_at: new Date().toISOString() })
-              .eq("id", account.id)
-          }
-          await updateNextAction(item, config)
-          return result.success
-        } else {
-          // Posts API unavailable — skip to connecting
-          await advanceStatus(item, "connecting")
-          return true
-        }
-      }
-      return false
-    }
+      const daysSinceMessage = (Date.now() - new Date(item.messaged_at).getTime()) / (1000 * 60 * 60 * 24)
+      if (daysSinceMessage < FOLLOW_UP_DAYS) return false // Not time yet
 
-    case "connecting": {
-      if (account.daily_connections_used < config.daily_connection_limit) {
-        // First, get the real member URN via viewProfile
+      const profileData = (item.profile_data || {}) as Record<string, unknown>
+      const firstMessage = (profileData.firstMessage as string) || ""
+      const toneStyle = (profileData.toneStyle as string) || "informal"
+
+      const followUp = await ai.generateFollowUp({
+        prospectName: item.full_name || "",
+        prospectHeadline: item.headline || "",
+        firstMessage,
+        toneStyle,
+      })
+
+      let dmUrn = (profileData.memberUrn as string) || ""
+      if (!dmUrn || !dmUrn.startsWith("urn:li:fsd_profile:")) {
         const profile = await linkedin.viewProfile(session, publicId)
-        if (!profile.success || !profile.memberUrn) {
-          await logAction(item, account.id, "connection_request", false, `viewProfile failed: ${profile.error || 'no memberUrn'}`, "")
-          return false
-        }
+        dmUrn = profile.memberUrn || `urn:li:fsd_profile:${publicId}`
         await linkedin.delay(CRON_DELAY_MIN_MS, CRON_DELAY_MAX_MS)
-        
-        const note = await ai.generateConnectionNote({
-          prospectName: item.full_name || "",
-          prospectHeadline: item.headline || "",
-          prospectCompany: item.company || "",
-          discType: item.disc_type,
-        })
-        const result = await linkedin.sendConnection(session, profile.memberUrn, note)
-        await logAction(item, account.id, "connection_request", result.success, result.error, note)
-        if (result.success) {
-          await advanceStatus(item, "connected")
-          await supabase
-            .from("agent_linkedin_accounts")
-            .update({ daily_connections_used: account.daily_connections_used + 1, last_action_at: new Date().toISOString() })
-            .eq("id", account.id)
-        }
-        return result.success
+      }
+
+      const result = await linkedin.sendMessage(session, dmUrn, followUp)
+      await logAction(item, account.id, "follow_up_message", result.success, result.error, followUp)
+
+      if (result.success) {
+        await advanceStatus(item, "follow_up")
+        // Auto-create CRM prospect after follow-up
+        await createCRMProspect(item)
+        debug.push(`Follow-up sent to ${item.full_name}`)
+      }
+      return result.success
+    }
+
+    // ── STAGE 5: Already followed up — done ──
+    case "follow_up": {
+      // Nothing more to do — waiting for manual response tracking
+      return false
+    }
+
+    // ── LEGACY stages from old flow ──
+    case "discovered":
+    case "connecting": {
+      // Old flow items — migrate them to new pipeline
+      const profile = await linkedin.viewProfile(session, publicId)
+      if (profile.success) {
+        await advanceStatus(item, "imported")
+        return true
       }
       return false
     }
 
     case "connected":
     case "nurturing": {
-      if (item.status === "connected") {
-        await advanceStatus(item, "nurturing")
-        return true
-      }
-      if (daysSinceStageStart >= config.nurturing_days) {
-        await advanceStatus(item, "messaged")
-        // Send the DM
-        const message = await ai.generateDirectMessage({
-          prospectName: item.full_name || "",
-          prospectHeadline: item.headline || "",
-          prospectCompany: item.company || "",
-          painPoints: item.pain_points,
-          salesAngle: item.sales_angle,
-          discType: item.disc_type,
-        })
-        const profileUrn = `urn:li:fsd_profile:${publicId}`
-        const result = await linkedin.sendMessage(session, profileUrn, message)
-        await logAction(item, account.id, "direct_message", result.success, result.error, message)
-
-        if (result.success) {
-          // Auto-create CRM prospect
-          await createCRMProspect(item)
-        }
-        return result.success
-      }
-      // During nurturing: view profile again, like posts
-      const result = await linkedin.viewProfile(session, publicId)
-      await logAction(item, account.id, "profile_view", result.success)
-      await updateNextAction(item, config)
-      return result.success
-    }
-
-    case "messaged": {
-      // Already messaged — waiting for response. Nothing to do.
-      return false
+      // Already connected in old flow — send them to DM stage
+      await advanceStatus(item, "ready_to_dm")
+      return true
     }
 
     default:
@@ -530,9 +608,17 @@ async function advanceStatus(item: QueueItem, newStatus: string, skipReason?: st
 }
 
 async function updateNextAction(item: QueueItem, config: AgentConfig) {
-  const delayMs = (config.delay_min_seconds + config.delay_max_seconds) / 2 * 1000 * 60 // Average delay in minutes, scaled up
-  const nextAction = new Date(Date.now() + Math.max(delayMs, 30 * 60 * 1000)) // At least 30 min
+  const delayMs = (config.delay_min_seconds + config.delay_max_seconds) / 2 * 1000 * 60
+  const nextAction = new Date(Date.now() + Math.max(delayMs, 30 * 60 * 1000))
+  await supabase
+    .from("agent_queue")
+    .update({ next_action_at: nextAction.toISOString(), updated_at: new Date().toISOString() })
+    .eq("id", item.id)
+}
 
+/** Set next action time in hours from now */
+async function setNextAction(item: QueueItem, hours: number) {
+  const nextAction = new Date(Date.now() + hours * 60 * 60 * 1000)
   await supabase
     .from("agent_queue")
     .update({ next_action_at: nextAction.toISOString(), updated_at: new Date().toISOString() })

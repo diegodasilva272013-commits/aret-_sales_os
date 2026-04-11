@@ -49,9 +49,6 @@ async function persistCookies(setCookieHeader: string | null, session: LinkedInS
   } catch { /* non-critical */ }
 }
 
-/**
- * Smart fetch — uses CF Worker relay, PROXY_URL, or direct fetch.
- * Priority: CF_RELAY_URL > PROXY_URL > direct
 // Hardcoded fallback — env vars don't reliably reach all Vercel serverless functions
 const RELAY_URL_FALLBACK = "https://linkedin-relay.arete-relay.workers.dev"
 const RELAY_SECRET_FALLBACK = "arete-relay-2026-secret-key"

@@ -30,9 +30,9 @@ async function persistCookies(setCookieHeader: string | null, session: LinkedInS
   try {
     if (!setCookieHeader) return
     
-    // Capture new li_at cookie
+    // Capture new li_at cookie (ignore invalidation values like "delete me" or empty)
     const liAtMatch = setCookieHeader.match(/li_at=([^;]+)/)
-    if (liAtMatch && liAtMatch[1] !== session.sessionCookie) {
+    if (liAtMatch && liAtMatch[1] !== session.sessionCookie && liAtMatch[1].length > 100 && !liAtMatch[1].includes(" ")) {
       console.log(`[persistCookies] li_at rotated for account ${session.accountId}`)
       const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
       await sb.from("agent_linkedin_accounts")

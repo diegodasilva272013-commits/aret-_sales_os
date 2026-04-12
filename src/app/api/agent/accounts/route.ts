@@ -100,6 +100,13 @@ export async function PATCH(req: NextRequest) {
   if (session_cookie.startsWith("li_at=")) session_cookie = session_cookie.slice(6)
   session_cookie = session_cookie.replace(/^["']|["']$/g, "").trim()
 
+  // Validate: li_at cookies are always long base64-like strings (200+ chars)
+  if (session_cookie.length < 100) {
+    return NextResponse.json({ 
+      error: `Cookie inválida (${session_cookie.length} chars). La cookie li_at debe ser un string largo. Copiá el valor completo de la cookie li_at desde Chrome DevTools.` 
+    }, { status: 400 })
+  }
+
   const { data, error } = await scope.supabase
     .from("agent_linkedin_accounts")
     .update({ session_cookie, status: "active" })

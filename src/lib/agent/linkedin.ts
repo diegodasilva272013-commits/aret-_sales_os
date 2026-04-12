@@ -336,7 +336,7 @@ export async function sendMessage(
   }
 }
 
-/** Search for prospects matching ICP criteria */
+/** Search for prospects matching ICP criteria (REST only — GraphQL kills sessions) */
 export async function searchPeople(
   session: LinkedInSession,
   params: {
@@ -351,10 +351,10 @@ export async function searchPeople(
   try {
     const keywords = params.keywords || ""
     const start = params.start || 0
+    const count = params.count || 25
 
-    // Use GraphQL endpoint — the REST dash/clusters endpoint returns 500
-    const vars = `(start:${start},origin:GLOBAL_SEARCH_HEADER,query:(keywords:${encodeURIComponent(keywords)},flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE)))))`
-    const url = `${LI_BASE}/voyager/api/graphql?variables=${vars}&queryId=voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0`
+    // REST search endpoint (NEVER use GraphQL — outdated queryIds cause LinkedIn to kill the session)
+    const url = `${LI_BASE}/voyager/api/search/dash/clusters?decorationId=com.linkedin.voyager.dash.deco.search.SearchClusterCollection-175&origin=GLOBAL_SEARCH_HEADER&q=all&query=(keywords:${encodeURIComponent(keywords)},flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE))))&start=${start}&count=${count}`
 
     const res = await liFetch(url, {
       headers: headers(session),
@@ -402,33 +402,53 @@ export async function searchPeople(
       }
     }
 
+    // Fallback 2: search elements format
+    if (results.length === 0) {
+      for (const el of (data?.elements || [])) {
+        for (const it of (el?.items || [])) {
+          const entity = it?.entity || it?.item?.entity
+          if (!entity?.navigationUrl) continue
+          const match = entity.navigationUrl.match(/\/in\/([^/?]+)/)
+          if (match) {
+            results.push({
+              publicId: match[1],
+              fullName: entity.title?.text || "",
+              headline: entity.primarySubtitle?.text || "",
+              company: entity.secondarySubtitle?.text || "",
+              location: entity.summary?.text || "",
+              profileUrn: entity.entityUrn || "",
+            })
+          }
+        }
+      }
+    }
+
     return { success: true, results }
   } catch (e) {
     return { success: false, error: String(e) }
   }
 }
 
-/** Get recent posts from a profile (uses feed GraphQL endpoint) */
+/** Get recent posts from a profile (REST only — GraphQL kills sessions) */
 export async function getProfilePosts(
   session: LinkedInSession,
   publicId: string,
   count = 5
 ): Promise<{ success: boolean; posts?: Array<{ urn: string; text: string; likeCount: number }>; error?: string }> {
   try {
-    // Try the GraphQL feed endpoint (more reliable than profileUpdatesV2)
-    const vars = `(count:${count},start:0,profileUrn:urn:li:fsd_profile:${encodeURIComponent(publicId)})`
-    const url = `${LI_BASE}/voyager/api/graphql?variables=${vars}&queryId=voyagerFeedDashProfileUpdates.f3e478a8f498c0774f0e53e33d805b4b`
-
-    const res = await liFetch(url, { headers: headers(session) }, session)
-    if (!res.ok) {
-      // Fallback: old REST endpoint
-      return getProfilePostsFallback(session, publicId, count)
-    }
+    // Use REST endpoint directly (NEVER use GraphQL — outdated queryIds kill sessions)
+    const res = await liFetch(
+      `${LI_BASE}/voyager/api/identity/profileUpdatesV2?profileUrn=urn:li:fsd_profile:${encodeURIComponent(publicId)}&q=memberShareFeed&count=${count}`,
+      { headers: headers(session), redirect: "manual" },
+      session
+    )
+    if (res.status >= 300) return { success: false, error: `HTTP ${res.status}` }
+    if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
 
     const data = await res.json()
     const posts: Array<{ urn: string; text: string; likeCount: number }> = []
-
-    // Posts are in included array with commentary
+    
+    // Try included array first (newer response format)
     for (const item of (data?.included || [])) {
       const text = item?.commentary?.text?.text
         || item?.commentary?.text
@@ -443,38 +463,20 @@ export async function getProfilePosts(
       }
     }
 
-    return { success: true, posts }
-  } catch (e) {
-    return { success: false, error: String(e) }
-  }
-}
-
-/** Fallback: old REST endpoint for posts */
-async function getProfilePostsFallback(
-  session: LinkedInSession,
-  publicId: string,
-  count: number
-): Promise<{ success: boolean; posts?: Array<{ urn: string; text: string; likeCount: number }>; error?: string }> {
-  try {
-    const res = await liFetch(
-      `${LI_BASE}/voyager/api/identity/profileUpdatesV2?profileUrn=urn:li:fsd_profile:${encodeURIComponent(publicId)}&q=memberShareFeed&count=${count}`,
-      { headers: headers(session) },
-      session
-    )
-    if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
-
-    const data = await res.json()
-    const posts: Array<{ urn: string; text: string; likeCount: number }> = []
-    for (const el of data?.elements || []) {
-      const commentary = el?.commentary?.text?.text || el?.value?.com?.linkedin?.voyager?.feed?.render?.UpdateV2?.commentary?.text?.text || ""
-      if (commentary) {
-        posts.push({
-          urn: el.updateUrn || el["*socialDetail"] || "",
-          text: commentary,
-          likeCount: el?.socialDetail?.totalSocialActivityCounts?.numLikes || 0,
-        })
+    // Fallback: elements array
+    if (posts.length === 0) {
+      for (const el of data?.elements || []) {
+        const commentary = el?.commentary?.text?.text || el?.value?.com?.linkedin?.voyager?.feed?.render?.UpdateV2?.commentary?.text?.text || ""
+        if (commentary) {
+          posts.push({
+            urn: el.updateUrn || el["*socialDetail"] || "",
+            text: commentary,
+            likeCount: el?.socialDetail?.totalSocialActivityCounts?.numLikes || 0,
+          })
+        }
       }
     }
+
     return { success: true, posts }
   } catch (e) {
     return { success: false, error: String(e) }

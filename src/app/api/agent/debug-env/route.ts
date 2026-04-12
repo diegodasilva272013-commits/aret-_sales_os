@@ -67,11 +67,9 @@ export async function GET(req: NextRequest) {
     "2_connections_classic": "https://www.linkedin.com/voyager/api/relationships/connections?count=10&start=0&sortType=RECENTLY_ADDED",
     "3_connections_dash": "https://www.linkedin.com/voyager/api/relationships/dash/connections?count=10&q=search&start=0&sortType=RECENTLY_ADDED",
     "4_connections_dash_decorated": "https://www.linkedin.com/voyager/api/relationships/dash/connections?decorationId=com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-16&count=10&q=search&start=0&sortType=RECENTLY_ADDED",
-    "5_graphql_connections": `https://www.linkedin.com/voyager/api/graphql?variables=(start:0,count:10,origin:MEMBER_PROFILE_CANNED_SEARCH)&queryId=voyagerRelationshipsDashConnections.2dc8bdaddb5e2371ce379b5e9a44fcff`,
-    "6_search_network": `https://www.linkedin.com/voyager/api/graphql?variables=(start:0,origin:GLOBAL_SEARCH_HEADER,query:(keywords:*,flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE)),(key:network,value:List(F)))))&queryId=voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0`,
-    "7_search_mynetwork": `https://www.linkedin.com/voyager/api/graphql?variables=(start:0,origin:MEMBER_PROFILE_CANNED_SEARCH,query:(flagshipSearchIntent:SEARCH_MY_NETWORK))&queryId=voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0`,
-    "8_typeahead": `https://www.linkedin.com/voyager/api/typeahead/hitsV2?keywords=a&origin=GLOBAL_SEARCH_HEADER&q=blended&type=PEOPLE`,
-    "9_feed": `https://www.linkedin.com/voyager/api/feed/dash/feedDetailsByModule?count=1&q=MODULE&moduleKey=NAVIGATOR_FEED`,
+    "5_search_rest": "https://www.linkedin.com/voyager/api/search/dash/clusters?decorationId=com.linkedin.voyager.dash.deco.search.SearchClusterCollection-175&origin=GLOBAL_SEARCH_HEADER&q=all&query=(keywords:test,flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE))))&start=0&count=5",
+    "6_typeahead": `https://www.linkedin.com/voyager/api/typeahead/hitsV2?keywords=a&origin=GLOBAL_SEARCH_HEADER&q=blended&type=PEOPLE`,
+    "7_feed": `https://www.linkedin.com/voyager/api/feed/dash/feedDetailsByModule?count=1&q=MODULE&moduleKey=NAVIGATOR_FEED`,
   }
 
   for (const [name, url] of Object.entries(urls)) {

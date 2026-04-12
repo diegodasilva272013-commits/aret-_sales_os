@@ -81,8 +81,10 @@ async function main() {
   await testRelay("3_connections_classic",
     "https://www.linkedin.com/voyager/api/relationships/connections?count=10&start=0&sortType=RECENTLY_ADDED")
 
-  await testRelay("4_graphql",
-    "https://www.linkedin.com/voyager/api/graphql?variables=(start:0,count:10,origin:MEMBER_PROFILE_CANNED_SEARCH)&queryId=voyagerRelationshipsDashConnections.2dc8bdaddb5e2371ce379b5e9a44fcff")
+  await testRelay("3_search_rest",
+    "https://www.linkedin.com/voyager/api/search/dash/clusters?decorationId=com.linkedin.voyager.dash.deco.search.SearchClusterCollection-175&origin=GLOBAL_SEARCH_HEADER&q=all&query=(keywords:test,flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE))))&start=0&count=5")
+
+  // DO NOT test GraphQL endpoints — they kill sessions with outdated queryIds!
 
   console.log("\n--- DONE ---")
 }

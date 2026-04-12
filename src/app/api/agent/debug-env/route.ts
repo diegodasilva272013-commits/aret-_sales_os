@@ -1,4 +1,28 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
+
+const RELAY_URL = "https://linkedin-relay.arete-relay.workers.dev"
+const RELAY_SECRET = "arete-relay-2026-secret-key"
+
+/** Test a LinkedIn URL through the relay and return status + response info */
+async function testUrl(url: string, cookieHeaders: Record<string, string>): Promise<{ status: number; location?: string; bodyPreview?: string; ok: boolean }> {
+  try {
+    const res = await fetch(RELAY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Relay-Secret": RELAY_SECRET },
+      body: JSON.stringify({ url, method: "GET", headers: cookieHeaders }),
+    })
+    const data = await res.json() as { status: number; headers: Record<string, string>; body: string }
+    return {
+      status: data.status,
+      location: data.headers?.location?.substring(0, 150),
+      bodyPreview: data.body?.substring(0, 300),
+      ok: data.status >= 200 && data.status < 300,
+    }
+  } catch (e) {
+    return { status: -1, bodyPreview: String(e), ok: false }
+  }
+}
 
 export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret")
@@ -6,38 +30,58 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "bad secret" }, { status: 403 })
   }
 
-  const relayUrl = process.env.CF_RELAY_URL
-  const relaySecret = process.env.CF_RELAY_SECRET
-  const proxyUrl = process.env.PROXY_URL
+  // Get the active cookie from DB
+  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  const { data: accounts } = await sb
+    .from("agent_linkedin_accounts")
+    .select("id, session_cookie, status, account_name")
+    .in("status", ["active", "warming"])
+    .not("session_cookie", "is", null)
+    .limit(1)
 
-  // Test the relay
-  let relayTest = "not attempted"
-  if (relayUrl?.trim()) {
-    try {
-      const res = await fetch(relayUrl.trim(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Relay-Secret": relaySecret?.trim() || "",
-        },
-        body: JSON.stringify({
-          url: "https://www.linkedin.com/voyager/api/me",
-          method: "GET",
-          headers: {},
-        }),
-      })
-      relayTest = `HTTP ${res.status} ${res.statusText}`
-    } catch (e) {
-      relayTest = `FETCH ERROR: ${String(e)}`
-    }
+  if (!accounts?.length) {
+    return NextResponse.json({ error: "No active accounts with cookies" })
+  }
+
+  const cookie = accounts[0].session_cookie!.trim()
+  const jsessionId = "ajax:test123"
+  const hdrs = {
+    "Cookie": `li_at=${cookie}; JSESSIONID="${jsessionId}"; lang=v=2&lang=es-es`,
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Accept": "application/vnd.linkedin.normalized+json+2.1",
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+    "X-Li-Lang": "es_ES",
+    "X-Restli-Protocol-Version": "2.0.0",
+    "Csrf-Token": jsessionId,
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+    "Referer": "https://www.linkedin.com/mynetwork/",
+  }
+
+  // Test multiple LinkedIn endpoints
+  const results: Record<string, { status: number; location?: string; bodyPreview?: string; ok: boolean }> = {}
+
+  const urls: Record<string, string> = {
+    "1_me": "https://www.linkedin.com/voyager/api/me",
+    "2_connections_classic": "https://www.linkedin.com/voyager/api/relationships/connections?count=10&start=0&sortType=RECENTLY_ADDED",
+    "3_connections_dash": "https://www.linkedin.com/voyager/api/relationships/dash/connections?count=10&q=search&start=0&sortType=RECENTLY_ADDED",
+    "4_connections_dash_decorated": "https://www.linkedin.com/voyager/api/relationships/dash/connections?decorationId=com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-16&count=10&q=search&start=0&sortType=RECENTLY_ADDED",
+    "5_graphql_connections": `https://www.linkedin.com/voyager/api/graphql?variables=(start:0,count:10,origin:MEMBER_PROFILE_CANNED_SEARCH)&queryId=voyagerRelationshipsDashConnections.2dc8bdaddb5e2371ce379b5e9a44fcff`,
+    "6_search_network": `https://www.linkedin.com/voyager/api/graphql?variables=(start:0,origin:GLOBAL_SEARCH_HEADER,query:(keywords:*,flagshipSearchIntent:SEARCH_SRP,queryParameters:List((key:resultType,value:List(PEOPLE)),(key:network,value:List(F)))))&queryId=voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0`,
+    "7_search_mynetwork": `https://www.linkedin.com/voyager/api/graphql?variables=(start:0,origin:MEMBER_PROFILE_CANNED_SEARCH,query:(flagshipSearchIntent:SEARCH_MY_NETWORK))&queryId=voyagerSearchDashClusters.b0928897b71bd00a5a7291755dcd64f0`,
+    "8_typeahead": `https://www.linkedin.com/voyager/api/typeahead/hitsV2?keywords=a&origin=GLOBAL_SEARCH_HEADER&q=blended&type=PEOPLE`,
+    "9_feed": `https://www.linkedin.com/voyager/api/feed/dash/feedDetailsByModule?count=1&q=MODULE&moduleKey=NAVIGATOR_FEED`,
+  }
+
+  for (const [name, url] of Object.entries(urls)) {
+    results[name] = await testUrl(url, hdrs)
   }
 
   return NextResponse.json({
-    CF_RELAY_URL: relayUrl ? `SET (${relayUrl.trim().length} chars): ${relayUrl.trim().substring(0, 50)}...` : "NOT SET",
-    CF_RELAY_URL_raw_length: relayUrl?.length,
-    CF_RELAY_URL_trimmed_length: relayUrl?.trim()?.length,
-    CF_RELAY_SECRET: relaySecret ? `SET (${relaySecret.trim().length} chars)` : "NOT SET",
-    PROXY_URL: proxyUrl ? `SET (${proxyUrl.trim().length} chars)` : "NOT SET",
-    relayTest,
+    account: accounts[0].account_name,
+    cookieLength: cookie.length,
+    cookiePreview: cookie.substring(0, 15) + "...",
+    results,
   })
 }

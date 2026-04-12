@@ -86,7 +86,7 @@ const FOLLOW_UP_DAYS = 2         // Follow up after 2 days of no response
 const SERVICE_DESCRIPTION = `Areté es una consultora que ayuda a empresas y líderes a potenciar sus equipos de ventas con entrenamiento, coaching y herramientas de gestión comercial. Trabajamos con directores, gerentes y equipos comerciales para mejorar sus resultados.`
 
 /** Main entry point — called by Vercel Cron or external trigger */
-export async function runAgentCycle(): Promise<{ processed: number; errors: number; debug?: string[] }> {
+export async function runAgentCycle(options?: { skipTimeCheck?: boolean }): Promise<{ processed: number; errors: number; debug?: string[] }> {
   let processed = 0
   let errors = 0
   const debug: string[] = []
@@ -109,7 +109,7 @@ export async function runAgentCycle(): Promise<{ processed: number; errors: numb
 
   for (const config of configs as AgentConfig[]) {
     try {
-      const result = await processOrganization(config, debug)
+      const result = await processOrganization(config, debug, options?.skipTimeCheck)
       processed += result.processed
       errors += result.errors
     } catch (e) {
@@ -122,26 +122,30 @@ export async function runAgentCycle(): Promise<{ processed: number; errors: numb
 }
 
 /** Process one organization: import connections + work the pipeline */
-async function processOrganization(config: AgentConfig, debug: string[]): Promise<{ processed: number; errors: number }> {
+async function processOrganization(config: AgentConfig, debug: string[], skipTimeCheck?: boolean): Promise<{ processed: number; errors: number }> {
   const now = new Date()
   const currentHour = ((now.getUTCHours() - 3) % 24 + 24) % 24
   const currentDay = now.getDay()
 
   debug.push(`Time: day=${currentDay} hour=${currentHour} (UTC ${now.getUTCHours()})`)
 
-  if (!config.active_days.includes(currentDay)) {
-    debug.push(`SKIP: day ${currentDay} not active`)
-    return { processed: 0, errors: 0 }
-  }
-  
-  const start = config.active_hours_start
-  const end = config.active_hours_end === 0 ? 24 : config.active_hours_end
-  if (start !== end && (currentHour < start || currentHour >= end)) {
-    debug.push(`SKIP: hour ${currentHour} outside ${start}-${end}`)
-    return { processed: 0, errors: 0 }
+  if (!skipTimeCheck) {
+    if (!config.active_days.includes(currentDay)) {
+      debug.push(`SKIP: day ${currentDay} not active`)
+      return { processed: 0, errors: 0 }
+    }
+    
+    const start = config.active_hours_start
+    const end = config.active_hours_end === 0 ? 24 : config.active_hours_end
+    if (start !== end && (currentHour < start || currentHour >= end)) {
+      debug.push(`SKIP: hour ${currentHour} outside ${start}-${end}`)
+      return { processed: 0, errors: 0 }
+    }
+  } else {
+    debug.push("⏭ Time check skipped (manual run)")
   }
 
-  debug.push("Hours OK, fetching accounts...")
+  debug.push("Fetching accounts...")
 
   const { data: accounts, error: accError } = await supabase
     .from("agent_linkedin_accounts")

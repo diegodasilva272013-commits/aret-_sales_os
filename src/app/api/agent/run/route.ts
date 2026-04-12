@@ -19,8 +19,8 @@ export async function POST() {
   console.log("[agent/run] Authenticated as userId:", scope.userId, "orgId:", scope.organizationId, "isOwner:", scope.isOwner)
 
   try {
-    console.log("[agent/run] Calling runAgentCycle()...")
-    const result = await runAgentCycle()
+    console.log("[agent/run] Calling runAgentCycle(skipTimeCheck=true)...")
+    const result = await runAgentCycle({ skipTimeCheck: true })
     console.log("[agent/run] Cycle complete:", JSON.stringify(result))
     return NextResponse.json({
       ok: true,

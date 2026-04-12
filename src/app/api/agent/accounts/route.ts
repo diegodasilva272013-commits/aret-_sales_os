@@ -90,10 +90,15 @@ export async function PATCH(req: NextRequest) {
   const scope = await getAgentScope()
   if (scope.error) return scope.error
 
-  const { accountId, session_cookie } = await req.json()
+  let { accountId, session_cookie } = await req.json()
   if (!accountId || !session_cookie) {
     return NextResponse.json({ error: "accountId y session_cookie son requeridos" }, { status: 400 })
   }
+
+  // Clean cookie: remove quotes, whitespace, "li_at=" prefix if pasted wrong
+  session_cookie = session_cookie.trim()
+  if (session_cookie.startsWith("li_at=")) session_cookie = session_cookie.slice(6)
+  session_cookie = session_cookie.replace(/^["']|["']$/g, "").trim()
 
   const { data, error } = await scope.supabase
     .from("agent_linkedin_accounts")

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getAgentScope } from "@/lib/agent-auth"
 import { createClient } from "@supabase/supabase-js"
-import { getConnections } from "@/lib/agent/linkedin"
+import { getConnections, validateSessionDetailed } from "@/lib/agent/linkedin"
 
 /** Service-role client for writes (same pattern as orchestrator) */
 function getServiceClient() {
@@ -65,26 +65,12 @@ export async function POST() {
     }, { status: 400 })
   }
 
-  // Clean cookie (remove quotes, whitespace, "li_at=" prefix if pasted wrong)
-  let cleanCookie = account.session_cookie.trim()
-  if (cleanCookie.startsWith("li_at=")) cleanCookie = cleanCookie.slice(6)
-  cleanCookie = cleanCookie.replace(/^["']|["']$/g, "").trim()
+  // Clean cookie
+  let cookie = account.session_cookie.trim()
+  if (cookie.startsWith("li_at=")) cookie = cookie.slice(6)
+  cookie = cookie.replace(/^["']|["']$/g, "").trim()
 
-  const session = {
-    sessionCookie: cleanCookie,
-    accountId: account.id,
-  }
-
-  // Pre-validate cookie before attempting import
-  const { validateSessionDetailed } = await import("@/lib/agent/linkedin")
-  const validation = await validateSessionDetailed(session)
-  if (!validation.valid) {
-    return NextResponse.json({
-      error: `Cookie expirada o inválida (${validation.detail}). Actualizá tu cookie li_at en la pestaña Cuentas.`,
-      cookieLength: cleanCookie.length,
-      cookiePreview: cleanCookie.substring(0, 10) + "...",
-    }, { status: 401 })
-  }
+  const session = { sessionCookie: cookie, accountId: account.id }
 
   // Get current offset (how many already imported)
   const { count: totalImported } = await sb

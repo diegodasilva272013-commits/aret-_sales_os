@@ -488,58 +488,98 @@ export async function getConnections(
   count = 40
 ): Promise<{ success: boolean; connections?: Array<{ publicId: string; fullName: string; headline: string; company: string; memberUrn: string }>; total?: number; error?: string }> {
   try {
-    const vars = `(start:${start},count:${count},origin:MEMBER_PROFILE_CANNED_SEARCH)`
-    const url = `${LI_BASE}/voyager/api/graphql?variables=${vars}&queryId=voyagerRelationshipsDashConnections.2dc8bdaddb5e2371ce379b5e9a44fcff`
+    // Use REST endpoint (more stable than GraphQL queryIds which LinkedIn rotates)
+    const url = `${LI_BASE}/voyager/api/relationships/dash/connections?decorationId=com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-16&count=${count}&q=search&start=${start}&sortType=RECENTLY_ADDED`
 
-    const res = await liFetch(url, { headers: headers(session) }, session)
-    if (!res.ok) return { success: false, error: `HTTP ${res.status}` }
-
-    const data = await res.json()
-    const connections: Array<{ publicId: string; fullName: string; headline: string; company: string; memberUrn: string }> = []
-
-    // Connections data is in the included array
-    for (const item of (data?.included || [])) {
-      // Look for mini-profile type items
-      const pubId = item.publicIdentifier
-      if (pubId && item.firstName) {
-        connections.push({
-          publicId: pubId,
-          fullName: `${item.firstName || ""} ${item.lastName || ""}`.trim(),
-          headline: item.occupation || item.headline || "",
-          company: "",
-          memberUrn: item.entityUrn || "",
-        })
-      }
+    const res = await liFetch(url, { headers: headers(session), redirect: "manual" }, session)
+    
+    if (res.status === 302 || res.status === 301) {
+      return { success: false, error: `HTTP ${res.status} — cookie expirada` }
+    }
+    if (!res.ok) {
+      // Try alternate endpoint if first one fails
+      const altUrl = `${LI_BASE}/voyager/api/search/dash/clusters?decorationId=com.linkedin.voyager.dash.deco.search.SearchClusterCollection-175&origin=MEMBER_PROFILE_CANNED_SEARCH&q=all&query=(flagshipSearchIntent:SEARCH_MY_NETWORK)&start=${start}&count=${count}`
+      const altRes = await liFetch(altUrl, { headers: headers(session), redirect: "manual" }, session)
+      if (!altRes.ok) return { success: false, error: `HTTP ${res.status} (alt: ${altRes.status})` }
+      return parseConnectionsResponse(await altRes.json())
     }
 
-    // Also check for navigation URL style items
-    if (connections.length === 0) {
-      for (const item of (data?.included || [])) {
-        if (item.navigationUrl?.includes("/in/")) {
-          const match = item.navigationUrl.match(/\/in\/([^/?]+)/)
-          if (match) {
-            connections.push({
-              publicId: match[1],
-              fullName: item.title?.text || "",
-              headline: item.primarySubtitle?.text || "",
-              company: item.secondarySubtitle?.text || "",
-              memberUrn: item.entityUrn || "",
-            })
-          }
-        }
-      }
-    }
-
-    // Try to get total from paging
-    const total = data?.data?.paging?.total
-      || data?.paging?.total
-      || data?.data?.searchDashConnectionsByMemberIdentity?.paging?.total
-      || undefined
-
-    return { success: true, connections, total }
+    return parseConnectionsResponse(await res.json())
   } catch (e) {
     return { success: false, error: String(e) }
   }
+}
+
+function parseConnectionsResponse(data: Record<string, unknown>): { success: boolean; connections: Array<{ publicId: string; fullName: string; headline: string; company: string; memberUrn: string }>; total?: number } {
+  const connections: Array<{ publicId: string; fullName: string; headline: string; company: string; memberUrn: string }> = []
+  const included = (data?.included || []) as Record<string, unknown>[]
+
+  // Method 1: Look for mini-profile type items (publicIdentifier + firstName)
+  for (const item of included) {
+    const pubId = item.publicIdentifier as string | undefined
+    if (pubId && item.firstName) {
+      connections.push({
+        publicId: pubId,
+        fullName: `${item.firstName || ""} ${item.lastName || ""}`.trim(),
+        headline: (item.occupation || item.headline || "") as string,
+        company: "",
+        memberUrn: (item.entityUrn || "") as string,
+      })
+    }
+  }
+
+  // Method 2: Look for navigationUrl style items
+  if (connections.length === 0) {
+    for (const item of included) {
+      const navUrl = (item.navigationUrl || "") as string
+      if (navUrl.includes("/in/")) {
+        const match = navUrl.match(/\/in\/([^/?]+)/)
+        if (match) {
+          const title = item.title as Record<string, string> | undefined
+          const sub1 = item.primarySubtitle as Record<string, string> | undefined
+          const sub2 = item.secondarySubtitle as Record<string, string> | undefined
+          connections.push({
+            publicId: match[1],
+            fullName: title?.text || "",
+            headline: sub1?.text || "",
+            company: sub2?.text || "",
+            memberUrn: (item.entityUrn || "") as string,
+          })
+        }
+      }
+    }
+  }
+
+  // Method 3: elements array (search endpoint format)
+  if (connections.length === 0) {
+    const elements = (data?.elements || []) as Record<string, unknown>[]
+    for (const el of elements) {
+      const items = (el?.items || []) as Record<string, unknown>[]
+      for (const it of items) {
+        const entity = it.entity as Record<string, unknown> | undefined
+        if (!entity) continue
+        const navUrl = (entity.navigationUrl || "") as string
+        const match = navUrl.match(/\/in\/([^/?]+)/)
+        if (match) {
+          const title = entity.title as Record<string, string> | undefined
+          const sub1 = entity.primarySubtitle as Record<string, string> | undefined
+          const sub2 = entity.secondarySubtitle as Record<string, string> | undefined
+          connections.push({
+            publicId: match[1],
+            fullName: title?.text || "",
+            headline: sub1?.text || "",
+            company: sub2?.text || "",
+            memberUrn: (entity.entityUrn || "") as string,
+          })
+        }
+      }
+    }
+  }
+
+  const paging = (data as Record<string, Record<string, unknown>>)?.paging
+  const total = (paging?.total as number) || undefined
+
+  return { success: true, connections, total }
 }
 
 /** Get detailed profile data including about, experience, skills */

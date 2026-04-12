@@ -85,3 +85,111 @@ export async function GET(req: NextRequest) {
     results,
   })
 }
+
+/** POST — Save a new cookie and test it end-to-end (temp endpoint for testing) */
+export async function POST(req: NextRequest) {
+  const secret = req.nextUrl.searchParams.get("secret")
+  if (secret !== process.env.CRON_SECRET) {
+    return NextResponse.json({ error: "bad secret" }, { status: 403 })
+  }
+
+  const body = await req.json() as { cookie?: string }
+  if (!body.cookie || body.cookie.length < 100) {
+    return NextResponse.json({ error: "cookie required (>100 chars)" }, { status: 400 })
+  }
+
+  const newCookie = body.cookie.trim().replace(/^li_at=/, "").replace(/^["']|["']$/g, "").trim()
+
+  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+  
+  // Get the first account
+  const { data: accounts } = await sb
+    .from("agent_linkedin_accounts")
+    .select("id, account_name, session_cookie")
+    .limit(1)
+
+  if (!accounts?.length) {
+    return NextResponse.json({ error: "No accounts found" })
+  }
+
+  const accountId = accounts[0].id
+  const oldLen = (accounts[0].session_cookie || "").length
+
+  // Step 1: Test cookie with LinkedIn /me endpoint
+  const jsessionId = "ajax:" + Math.random().toString(36).slice(2, 8)
+  const hdrs = {
+    "Cookie": `li_at=${newCookie}; JSESSIONID="${jsessionId}"; lang=v=2&lang=es-es`,
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    "Accept": "application/vnd.linkedin.normalized+json+2.1",
+    "X-Restli-Protocol-Version": "2.0.0",
+    "Csrf-Token": jsessionId,
+    "Referer": "https://www.linkedin.com/feed/",
+  }
+
+  const meTest = await testUrl("https://www.linkedin.com/voyager/api/me", hdrs)
+  if (!meTest.ok) {
+    return NextResponse.json({
+      error: "Cookie INVÁLIDA — LinkedIn devolvió " + meTest.status,
+      step: "validate",
+      meTest,
+    })
+  }
+
+  // Step 2: Test connections endpoint
+  const connTest = await testUrl(
+    "https://www.linkedin.com/voyager/api/relationships/dash/connections?decorationId=com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-16&count=5&q=search&start=0&sortType=RECENTLY_ADDED",
+    hdrs
+  )
+
+  // Step 3: Save to database  
+  const { error: updateErr } = await sb
+    .from("agent_linkedin_accounts")
+    .update({ session_cookie: newCookie, status: "active" })
+    .eq("id", accountId)
+
+  if (updateErr) {
+    return NextResponse.json({ error: "DB update failed: " + updateErr.message, step: "save" })
+  }
+
+  // Step 4: Verify saved
+  const { data: verify } = await sb
+    .from("agent_linkedin_accounts")
+    .select("session_cookie")
+    .eq("id", accountId)
+    .single()
+
+  const savedLen = (verify?.session_cookie || "").length
+  const cookieMatch = verify?.session_cookie === newCookie
+
+  // Step 5: Parse some connection names from the response
+  let connectionNames: string[] = []
+  if (connTest.ok && connTest.bodyPreview) {
+    try {
+      const full = await (await fetch(RELAY_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Relay-Secret": RELAY_SECRET },
+        body: JSON.stringify({ 
+          url: "https://www.linkedin.com/voyager/api/relationships/dash/connections?decorationId=com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-16&count=5&q=search&start=0&sortType=RECENTLY_ADDED",
+          method: "GET", headers: hdrs 
+        }),
+      })).json() as { body: string }
+      const parsed = JSON.parse(full.body)
+      const included = (parsed?.included || []) as Array<{ publicIdentifier?: string; firstName?: string; lastName?: string }>
+      connectionNames = included
+        .filter(i => i.publicIdentifier && i.firstName)
+        .slice(0, 5)
+        .map(i => `${i.firstName} ${i.lastName} (${i.publicIdentifier})`)
+    } catch { /* ignore */ }
+  }
+
+  return NextResponse.json({
+    success: true,
+    steps: {
+      "1_validate_cookie": { status: meTest.status, ok: meTest.ok },
+      "2_test_connections": { status: connTest.status, ok: connTest.ok },
+      "3_save_to_db": { ok: !updateErr, oldCookieLen: oldLen, newCookieLen: newCookie.length },
+      "4_verify_saved": { savedLen, cookieMatch },
+      "5_sample_connections": connectionNames,
+    }
+  })
+}

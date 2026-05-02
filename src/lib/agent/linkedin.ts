@@ -18,6 +18,13 @@ interface LinkedInSession {
   jsessionId?: string
 }
 
+function normalizeLiAtCookie(value: string): string {
+  let cookie = value.trim()
+  if (cookie.startsWith("li_at=")) cookie = cookie.slice(6)
+  cookie = cookie.replace(/^['\"]|['\"]$/g, "").trim()
+  return cookie
+}
+
 /** Get proxy dispatcher if PROXY_URL is configured */
 function getDispatcher(): ProxyAgent | undefined {
   const proxyUrl = process.env.PROXY_URL
@@ -49,17 +56,23 @@ async function persistCookies(setCookieHeader: string | null, session: LinkedInS
   } catch { /* non-critical */ }
 }
 
-// Hardcoded fallback — env vars don't reliably reach all Vercel serverless functions
-const RELAY_URL_FALLBACK = "https://linkedin-relay.arete-relay.workers.dev"
-const RELAY_SECRET_FALLBACK = "arete-relay-2026-secret-key"
+async function directFetch(url: string, init?: RequestInit, session?: LinkedInSession): Promise<Response> {
+  const dispatcher = getDispatcher()
+  const res = dispatcher
+    ? await fetch(url, { ...init, dispatcher } as never)
+    : await fetch(url, init)
+
+  if (session) await persistCookies(res.headers.get("set-cookie"), session)
+  return res
+}
 
 /**
  * Smart fetch — uses CF Worker relay, PROXY_URL, or direct fetch.
  * Priority: CF_RELAY_URL > PROXY_URL > direct
  */
 async function liFetch(url: string, init?: RequestInit, session?: LinkedInSession): Promise<Response> {
-  const relayUrl = (process.env.CF_RELAY_URL || RELAY_URL_FALLBACK).trim()
-  const relaySecret = (process.env.CF_RELAY_SECRET || RELAY_SECRET_FALLBACK).trim()
+  const relayUrl = process.env.CF_RELAY_URL?.trim() || ""
+  const relaySecret = process.env.CF_RELAY_SECRET?.trim() || ""
 
   // Option 1: Cloudflare Worker relay (best for avoiding datacenter IP detection)
   console.log(`[liFetch] relay=${relayUrl ? "YES" : "NO"} url=${url.substring(0, 80)}`)
@@ -71,7 +84,12 @@ async function liFetch(url: string, init?: RequestInit, session?: LinkedInSessio
       headers: init?.headers || {},
     }
     if (init?.body && method !== "GET") {
-      relayBody.bodyContent = JSON.parse(init.body as string)
+      const rawBody = init.body as string
+      try {
+        relayBody.bodyContent = JSON.parse(rawBody)
+      } catch {
+        relayBody.bodyRaw = rawBody
+      }
     }
 
     let relayRes: Response
@@ -88,9 +106,7 @@ async function liFetch(url: string, init?: RequestInit, session?: LinkedInSessio
       console.error(`[liFetch] Relay fetch failed: ${String(relayErr)}`)
       // Fallback to direct if relay fails
       console.log(`[liFetch] Falling back to direct fetch...`)
-      const directRes = await fetch(url, init)
-      if (session) await persistCookies(directRes.headers.get("set-cookie"), session)
-      return directRes
+      return directFetch(url, init, session)
     }
 
     if (!relayRes.ok) {
@@ -99,9 +115,7 @@ async function liFetch(url: string, init?: RequestInit, session?: LinkedInSessio
       // If relay returns auth error or 5xx, fallback to direct
       if (relayRes.status >= 500 || relayRes.status === 401) {
         console.log(`[liFetch] Relay error ${relayRes.status}, falling back to direct...`)
-        const directRes = await fetch(url, init)
-        if (session) await persistCookies(directRes.headers.get("set-cookie"), session)
-        return directRes
+        return directFetch(url, init, session)
       }
     }
 
@@ -110,9 +124,7 @@ async function liFetch(url: string, init?: RequestInit, session?: LinkedInSessio
       data = await relayRes.json() as typeof data
     } catch {
       console.error(`[liFetch] Relay returned non-JSON response`)
-      const directRes = await fetch(url, init)
-      if (session) await persistCookies(directRes.headers.get("set-cookie"), session)
-      return directRes
+      return directFetch(url, init, session)
     }
 
     // Persist cookies from relay response
@@ -126,21 +138,17 @@ async function liFetch(url: string, init?: RequestInit, session?: LinkedInSessio
     })
   }
 
-  // Option 2: HTTP proxy
-  const dispatcher = getDispatcher()
-  const res = dispatcher
-    ? await fetch(url, { ...init, dispatcher } as never)
-    : await fetch(url, init)
-
-  if (session) await persistCookies(res.headers.get("set-cookie"), session)
-  return res
+  // Option 2: HTTP proxy or direct fetch
+  return directFetch(url, init, session)
 }
 
 /** Full Chrome-like headers to avoid bot detection */
 function headers(session: LinkedInSession) {
+  const liAt = normalizeLiAtCookie(session.sessionCookie)
+  if (liAt !== session.sessionCookie) session.sessionCookie = liAt
   const jsessionId = session.jsessionId || "ajax:" + crypto.randomUUID().slice(0, 8)
   return {
-    "Cookie": `li_at=${session.sessionCookie}; JSESSIONID="${jsessionId}"; lang=v=2&lang=es-es`,
+    "Cookie": `li_at=${liAt}; JSESSIONID="${jsessionId}"; lang=v=2&lang=es-es`,
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     "Accept": "application/vnd.linkedin.normalized+json+2.1",
     "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",

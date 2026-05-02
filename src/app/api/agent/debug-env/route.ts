@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
-const RELAY_URL = "https://linkedin-relay.arete-relay.workers.dev"
-const RELAY_SECRET = "arete-relay-2026-secret-key"
+function getRelayConfig() {
+  return {
+    relayUrl: process.env.CF_RELAY_URL?.trim() || "",
+    relaySecret: process.env.CF_RELAY_SECRET?.trim() || "",
+  }
+}
 
 /** Test a LinkedIn URL through the relay and return status + response info */
 async function testUrl(url: string, cookieHeaders: Record<string, string>): Promise<{ status: number; location?: string; bodyPreview?: string; ok: boolean }> {
   try {
-    const res = await fetch(RELAY_URL, {
+    const { relayUrl, relaySecret } = getRelayConfig()
+    if (!relayUrl || !relaySecret) {
+      return { status: -1, bodyPreview: "Relay not configured", ok: false }
+    }
+
+    const res = await fetch(relayUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Relay-Secret": RELAY_SECRET },
+      headers: { "Content-Type": "application/json", "X-Relay-Secret": relaySecret },
       body: JSON.stringify({ url, method: "GET", headers: cookieHeaders }),
     })
     const data = await res.json() as { status: number; headers: Record<string, string>; body: string }
@@ -28,6 +37,11 @@ export async function GET(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret")
   if (secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "bad secret" }, { status: 403 })
+  }
+
+  const { relayUrl, relaySecret } = getRelayConfig()
+  if (!relayUrl || !relaySecret) {
+    return NextResponse.json({ error: "Relay not configured", relayUrlConfigured: !!relayUrl, relaySecretConfigured: !!relaySecret }, { status: 500 })
   }
 
   // Get the active cookie from DB
@@ -78,6 +92,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     account: accounts[0].account_name,
+    relayUrl,
     cookieLength: cookie.length,
     cookiePreview: cookie.substring(0, 15) + "...",
     results,
@@ -89,6 +104,11 @@ export async function POST(req: NextRequest) {
   const secret = req.nextUrl.searchParams.get("secret")
   if (secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: "bad secret" }, { status: 403 })
+  }
+
+  const { relayUrl, relaySecret } = getRelayConfig()
+  if (!relayUrl || !relaySecret) {
+    return NextResponse.json({ error: "Relay not configured", relayUrlConfigured: !!relayUrl, relaySecretConfigured: !!relaySecret }, { status: 500 })
   }
 
   const body = await req.json() as { cookie?: string }
@@ -163,9 +183,9 @@ export async function POST(req: NextRequest) {
   let connectionNames: string[] = []
   if (connTest.ok && connTest.bodyPreview) {
     try {
-      const full = await (await fetch(RELAY_URL, {
+      const full = await (await fetch(relayUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Relay-Secret": RELAY_SECRET },
+        headers: { "Content-Type": "application/json", "X-Relay-Secret": relaySecret },
         body: JSON.stringify({ 
           url: "https://www.linkedin.com/voyager/api/relationships/dash/connections?decorationId=com.linkedin.voyager.dash.deco.web.mynetwork.ConnectionListWithProfile-16&count=5&q=search&start=0&sortType=RECENTLY_ADDED",
           method: "GET", headers: hdrs 
